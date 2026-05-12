@@ -1,0 +1,804 @@
+/***** Survivor 51 App Engine — unified setup, scoring, admin, uploads *****/
+
+const GAME_SHEETS_51 = {
+  CONFIG: 'Config',
+  PLAYERS: 'Players',
+  CAST: 'CastStatus',
+  PICKS: 'Picks',
+  WEEKSCORING: 'WeekScoring',
+  SCORES: 'Scores',
+  PLAYERBONUSES: 'PlayerBonuses',
+  CAMPCONTRIBUTIONS: 'CampContributions',
+  WEEKRECAPS: 'WeekRecaps',
+  PHOTOS: 'Photos',
+  QUESTIONWEEKS: 'QuestionWeeks'
+};
+
+const GAME_HEADERS_51 = {
+  CONFIG: ['Key', 'Value'],
+  PLAYERS: ['Name', 'Email', 'Active', 'PhotoUrl'],
+  CAST: ['Name', 'Status', 'PhotoUrl', 'Team', 'TeamPhotoUrl'],
+  PICKS: [
+    'Timestamp',
+    'Week',
+    'Name',
+    'Email',
+    'Q1_Label', 'Q1_Pick',
+    'Q2_Label', 'Q2_Pick',
+    'Q3_Label', 'Q3_Pick',
+    'Q4_Label', 'Q4_Pick',
+    'Q5_Label', 'Q5_Pick',
+    'Q6_Label', 'Q6_Pick',
+    'Bonus_Label', 'Bonus_Pick',
+    'Comment_Label', 'Comment_Text',
+    'SubmittedByAdmin',
+    'AutoAssigned',
+    'PenaltyApplied'
+  ],
+  WEEKSCORING: [
+    'Week',
+    'Q1_Correct', 'Q1_Points',
+    'Q2_Correct', 'Q2_Points',
+    'Q3_Correct', 'Q3_Points',
+    'Q4_Correct', 'Q4_Points',
+    'Q5_Correct', 'Q5_Points',
+    'Q6_Correct', 'Q6_Points',
+    'Bonus_Correct', 'Bonus_Points',
+    'Q1_CorrectPlus', 'Q1_CorrectPlus_Points',
+    'Q1_CorrectMinus', 'Q1_CorrectMinus_Points'
+  ],
+  SCORES: ['Week', 'Name', 'Email', 'WeekPoints', 'RunningTotal', 'Rank'],
+  PLAYERBONUSES: ['Week', 'Player', 'Points', 'Reason'],
+  CAMPCONTRIBUTIONS: ['Week', 'Player', 'Points', 'Reason'],
+  WEEKRECAPS: ['Week', 'Title', 'RecapHtml'],
+  PHOTOS: ['Timestamp', 'Week', 'Name', 'Email', 'Caption', 'PhotoUrl', 'DriveFileId', 'Approved'],
+  QUESTIONWEEKS: [
+    'Week',
+    'Q1', 'Q1Type', 'Q1Options',
+    'Q2', 'Q2Type', 'Q2Options',
+    'Q3', 'Q3Type', 'Q3Options',
+    'Q4', 'Q4Type', 'Q4Options',
+    'Q5', 'Q5Type', 'Q5Options',
+    'Q6', 'Q6Type', 'Q6Options',
+    'BonusQ', 'BonusType', 'BonusOptions',
+    'CommentPromptTemplate'
+  ]
+};
+
+const SURVIVOR_THEMED_AUTO_COMMENTS = [
+  'The tribe had to choose for you this round.',
+  'Your parchment was missing, so camp made the call.',
+  'The island decided your fate while you were away from camp.',
+  'No vote was cast, so the tribe stepped in.',
+  'Your torch stayed lit, but the tribe filled in your answers.'
+];
+
+/* =========================
+   ONE-TIME SETUP
+========================= */
+
+function setupSurvivorApp_FAST() {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActive();
+
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CONFIG, GAME_HEADERS_51.CONFIG);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PLAYERS, GAME_HEADERS_51.PLAYERS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAST, GAME_HEADERS_51.CAST);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PICKS, GAME_HEADERS_51.PICKS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKSCORING, GAME_HEADERS_51.WEEKSCORING);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.SCORES, GAME_HEADERS_51.SCORES);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PLAYERBONUSES, GAME_HEADERS_51.PLAYERBONUSES);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAMPCONTRIBUTIONS, GAME_HEADERS_51.CAMPCONTRIBUTIONS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKRECAPS, GAME_HEADERS_51.WEEKRECAPS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PHOTOS, GAME_HEADERS_51.PHOTOS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.QUESTIONWEEKS, GAME_HEADERS_51.QUESTIONWEEKS);
+
+    seedAppConfigIfMissing_();
+    formatAllSheets_();
+
+    return {
+      ok: true,
+      message: 'Season 51 app sheets are ready.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function seedAppConfigIfMissing_() {
+  const ss = SpreadsheetApp.getActive();
+  const configSheet = mustGetSheet_(ss, GAME_SHEETS_51.CONFIG);
+  const existing = readConfig_(configSheet);
+
+  const defaults = {
+    SeasonName: 'Survivor Season 51',
+    TribeLedgerTitle: 'The Tribal Ledger',
+    TribeLedgerSubtitle: 'Outwit • Outplay • Outlast • Outscore',
+    WeekNumber: 1,
+    Timezone: 'America/Los_Angeles',
+    VotingOpen: 'AUTO',
+    CloseDay: 'Wednesday',
+    CloseTime: '9:00 AM',
+    RevealDay: 'Wednesday',
+    RevealTime: '8:00 PM',
+    EpisodeDay: 'Wednesday',
+    EpisodeTime: '8:00 PM',
+    AdminPasscode: '',
+    AdminEmail: Session.getActiveUser().getEmail() || '',
+    Q1: '',
+    Q1Type: 'cast',
+    Q1Options: '',
+    Q2: '',
+    Q2Type: 'cast',
+    Q2Options: '',
+    Q3: '',
+    Q3Type: 'cast',
+    Q3Options: '',
+    Q4: '',
+    Q4Type: 'cast',
+    Q4Options: '',
+    Q5: '',
+    Q5Type: 'cast',
+    Q5Options: '',
+    Q6: '',
+    Q6Type: 'cast',
+    Q6Options: '',
+    BonusQ: '',
+    BonusType: 'cast',
+    BonusOptions: '',
+    CommentPromptTemplate: 'Campfire thoughts',
+    CampAnnouncementsTitle: 'Camp Announcements',
+    CampAnnouncement1: '',
+    CampAnnouncement2: '',
+    CampAnnouncement3: '',
+    AtAGlanceTitle: 'Camp Rules',
+    AtAGlance1: '',
+    AtAGlance2: '',
+    AtAGlance3: '',
+    AtAGlance4: '',
+    AtAGlance5: '',
+    AtAGlance6: '',
+    AtAGlance7: '',
+    AtAGlance8: '',
+    AtAGlance9: '',
+    AtAGlance10: '',
+    PhotoUploadTitle: 'Tribe Snapshots',
+    PhotoUploadInstructions: 'Drop your Survivor-themed photo here for the tribe.',
+    PhotoDriveFolderId: '',
+    Teams: '',
+    TeamPhotos: ''
+  };
+
+  Object.keys(defaults).forEach(key => {
+    if (existing[key] === undefined || existing[key] === '') {
+      setConfigValue_(configSheet, key, defaults[key]);
+    }
+  });
+}
+
+function formatAllSheets_() {
+  const ss = SpreadsheetApp.getActive();
+  Object.values(GAME_SHEETS_51).forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    if (sh.getLastRow() > 0) {
+      sh.getRange(1, 1, 1, sh.getLastColumn())
+        .setFontWeight('bold')
+        .setBackground('#3a291b')
+        .setFontColor('#fff7e6');
+      sh.setFrozenRows(1);
+      sh.autoResizeColumns(1, sh.getLastColumn());
+    }
+  });
+}
+
+/* =========================
+   SCORE ENGINE
+========================= */
+
+function recalculateScores() {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActive();
+    const picks = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PICKS)), buildCanonicalNameMap_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERS))));
+    const scoringByWeek = buildScoringMap_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING)));
+    const scoresSheet = mustGetSheet_(ss, GAME_SHEETS_51.SCORES);
+
+    const runningTotals = new Map();
+    const out = [];
+
+    const weeks = Object.keys(scoringByWeek)
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+
+    weeks.forEach(week => {
+      const weekRows = picks.filter(r => Number(r.Week || 0) === week);
+      const rule = scoringByWeek[week];
+
+      const ranking = weekRows.map(row => {
+        const playerName = String(row.Name || '').trim();
+        const playerKey = nameKey51_(playerName);
+        const weekPoints =
+          computeWeekPoints51_(row, rule) +
+          getManualBonusPoints51_(ss, week, playerName);
+
+        const previous = runningTotals.get(playerKey) || 0;
+        const total = previous + weekPoints;
+        runningTotals.set(playerKey, total);
+
+        return {
+          week,
+          name: playerName,
+          email: String(row.Email || '').trim(),
+          weekPoints,
+          total
+        };
+      });
+
+      ranking.sort((a, b) => {
+        if (b.total !== a.total) return b.total - a.total;
+        return a.name.localeCompare(b.name);
+      });
+
+      const ranks = denseRank51_(ranking.map(r => r.total));
+      ranking.forEach((r, idx) => out.push([r.week, r.name, r.email, r.weekPoints, r.total, ranks[idx]]));
+    });
+
+    scoresSheet.clearContents();
+    scoresSheet.getRange(1, 1, 1, GAME_HEADERS_51.SCORES.length).setValues([GAME_HEADERS_51.SCORES]);
+    if (out.length) {
+      scoresSheet.getRange(2, 1, out.length, GAME_HEADERS_51.SCORES.length).setValues(out);
+    }
+
+    refreshCampContributionsLog51_();
+
+    return { ok: true, message: 'Scores recalculated.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function computeWeekPoints51_(pick, rule) {
+  let points = 0;
+  points += scoreAnswer51_(pick.Q1_Pick, rule.Q1_Correct, rule.Q1_Points);
+  points += scoreAnswer51_(pick.Q2_Pick, rule.Q2_Correct, rule.Q2_Points);
+  points += scoreAnswer51_(pick.Q3_Pick, rule.Q3_Correct, rule.Q3_Points);
+  points += scoreAnswer51_(pick.Q4_Pick, rule.Q4_Correct, rule.Q4_Points);
+  points += scoreAnswer51_(pick.Q5_Pick, rule.Q5_Correct, rule.Q5_Points);
+  points += scoreAnswer51_(pick.Q6_Pick, rule.Q6_Correct, rule.Q6_Points);
+  points += scoreAnswer51_(pick.Bonus_Pick, rule.Bonus_Correct, rule.Bonus_Points);
+
+  if (matchesCorrect51_(pick.Q1_Pick, rule.Q1_CorrectPlus)) {
+    points += toNumberOrDefault_(rule.Q1_CorrectPlus_Points, 4);
+  }
+  if (matchesCorrect51_(pick.Q1_Pick, rule.Q1_CorrectMinus)) {
+    points += toNumberOrDefault_(rule.Q1_CorrectMinus_Points, -3);
+  }
+  return points;
+}
+
+function scoreAnswer51_(pickValue, correctValue, pointValue) {
+  return matchesCorrect51_(pickValue, correctValue) ? toNumberOrDefault_(pointValue, 0) : 0;
+}
+
+function matchesCorrect51_(pickValue, correctValue) {
+  const pick = normalizeAnswer51_(pickValue);
+  if (!pick) return false;
+  const candidates = String(correctValue || '')
+    .split('|')
+    .map(normalizeAnswer51_)
+    .filter(Boolean);
+  return candidates.includes(pick);
+}
+
+function getManualBonusPoints51_(ss, week, playerName) {
+  const rows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES));
+  const target = nameKey51_(playerName);
+  return rows.reduce((sum, row) => {
+    const rowWeek = Number(row.Week || 0);
+    const rowPlayer = nameKey51_(row.Player);
+    const pts = Number(row.Points || 0);
+    return rowWeek === week && rowPlayer === target && Number.isFinite(pts) ? sum + pts : sum;
+  }, 0);
+}
+
+function refreshCampContributionsLog51_() {
+  const ss = SpreadsheetApp.getActive();
+  const rows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES));
+  const sheet = mustGetSheet_(ss, GAME_SHEETS_51.CAMPCONTRIBUTIONS);
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, GAME_HEADERS_51.CAMPCONTRIBUTIONS.length)
+    .setValues([GAME_HEADERS_51.CAMPCONTRIBUTIONS]);
+
+  if (!rows.length) return;
+
+  const values = rows.map(r => [
+    Number(r.Week || 0) || '',
+    String(r.Player || ''),
+    Number(r.Points || 0) || '',
+    String(r.Reason || '')
+  ]);
+
+  sheet.getRange(2, 1, values.length, GAME_HEADERS_51.CAMPCONTRIBUTIONS.length).setValues(values);
+}
+
+function dedupeLatestPicks_(rows, canonicalByKey) {
+  const map = new Map();
+
+  rows.forEach(row => {
+    const week = Number(row.Week || 0);
+    if (!week) return;
+
+    const submittedKey = nameKey51_(row.Name);
+    let canonical = canonicalByKey.get(submittedKey) || normNameDisplay_(row.Name);
+    if (!canonical) return;
+
+    const key = `${week}||${nameKey51_(canonical)}`;
+    const existing = map.get(key);
+    const rowTs = new Date(row.Timestamp || 0).getTime();
+    const existingTs = existing ? new Date(existing.Timestamp || 0).getTime() : -Infinity;
+
+    if (!existing || rowTs > existingTs) {
+      const clean = Object.assign({}, row);
+      clean.Name = canonical;
+      clean.Email = normalizeEmail51_(row.Email);
+      map.set(key, clean);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => {
+    const weekDiff = Number(a.Week || 0) - Number(b.Week || 0);
+    if (weekDiff !== 0) return weekDiff;
+    return normName_(a.Name).localeCompare(normName_(b.Name));
+  });
+}
+
+function buildCanonicalNameMap_(players) {
+  const map = new Map();
+  (players || []).forEach(p => {
+    if (String(p.Active || '').toUpperCase() === 'FALSE') return;
+    const canonical = normNameDisplay_(p.Name);
+    if (!canonical) return;
+    map.set(nameKey51_(canonical), canonical);
+  });
+  return map;
+}
+
+function buildScoringMap_(rows) {
+  const out = {};
+  rows.forEach(row => {
+    const week = Number(row.Week || 0);
+    if (week) out[week] = row;
+  });
+  return out;
+}
+
+/* =========================
+   AUTO ASSIGN FOR MISSED PICKS
+========================= */
+
+function autoFillMissingPicks() {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActive();
+    const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
+    const week = Number(config.WeekNumber || 1);
+
+    const players = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERS))
+      .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE');
+
+    const castRows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.CAST))
+      .filter(r => isActiveCastStatus51_(r.Status));
+
+    const questionConfig = typeof getQuestionConfigForWeek_ === 'function'
+      ? getQuestionConfigForWeek_(week, config)
+      : config;
+    const questionDefs = getQuestionDefinitions_(questionConfig, castRows);
+
+    const existing = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PICKS)), buildCanonicalNameMap_(players))
+      .filter(r => Number(r.Week || 0) === week);
+
+    const existingKeys = new Set(existing.map(r => nameKey51_(r.Name)));
+
+    const createdFor = [];
+
+    players.forEach(player => {
+      const key = nameKey51_(player.Name);
+      if (existingKeys.has(key)) return;
+
+      const payload = {
+        week,
+        name: String(player.Name || '').trim(),
+        email: String(player.Email || '').trim(),
+        commentLabel: String(questionConfig.CommentPromptTemplate || 'Campfire thoughts'),
+        commentText: pickRandom_(SURVIVOR_THEMED_AUTO_COMMENTS)
+      };
+
+      questionDefs.forEach(q => {
+        if (q.type === 'text') return;
+        payload[`${q.key}Label`] = q.prompt;
+        payload[`${q.key}Pick`] = pickRandom_(q.options.map(o => o.value));
+      });
+
+      payload.SubmittedByAdmin = 'FALSE';
+      payload.AutoAssigned = 'TRUE';
+      payload.PenaltyApplied = 'TRUE';
+
+      upsertPickRecord_(payload, { allowAdminEdit: true, markAutoAssigned: true });
+      addOrUpdateBonusRow_(week, payload.name, -1, 'Processing fee for missed submission');
+      createdFor.push(payload.name);
+    });
+
+    return {
+      ok: true,
+      message: createdFor.length
+        ? `Auto-assigned picks for: ${createdFor.join(', ')}`
+        : 'No missing picks needed auto-assignment.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addOrUpdateBonusRow_(week, player, points, reason) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES);
+  const rows = readTable_(sheet);
+  const headers = getHeaders_(sheet);
+
+  let rowNumber = null;
+  for (let i = 0; i < rows.length; i++) {
+    if (
+      Number(rows[i].Week || 0) === Number(week) &&
+      nameKey51_(rows[i].Player) === nameKey51_(player) &&
+      String(rows[i].Reason || '').trim() === String(reason || '').trim()
+    ) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  const record = {
+    Week: Number(week),
+    Player: String(player || '').trim(),
+    Points: Number(points || 0),
+    Reason: String(reason || '').trim()
+  };
+  const values = headers.map(h => record[h] !== undefined ? record[h] : '');
+
+  if (rowNumber) {
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+}
+
+/* =========================
+   ADMIN HELPERS
+========================= */
+
+function adminSaveResults(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+
+  const ss = SpreadsheetApp.getActive();
+  const sheet = mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING);
+  const headers = getHeaders_(sheet);
+  const rows = readTable_(sheet);
+  const week = Number(payload.week || 0);
+
+  if (!week) throw new Error('Missing week number.');
+
+  const record = {
+    Week: week,
+    Q1_Correct: String(payload.q1 || '').trim(),
+    Q1_Points: pointValueOrBlank_(payload.q1Points),
+    Q2_Correct: String(payload.q2 || '').trim(),
+    Q2_Points: pointValueOrBlank_(payload.q2Points),
+    Q3_Correct: String(payload.q3 || '').trim(),
+    Q3_Points: pointValueOrBlank_(payload.q3Points),
+    Q4_Correct: String(payload.q4 || '').trim(),
+    Q4_Points: pointValueOrBlank_(payload.q4Points),
+    Q5_Correct: String(payload.q5 || '').trim(),
+    Q5_Points: pointValueOrBlank_(payload.q5Points),
+    Q6_Correct: String(payload.q6 || '').trim(),
+    Q6_Points: pointValueOrBlank_(payload.q6Points),
+    Bonus_Correct: String(payload.bonus || '').trim(),
+    Bonus_Points: pointValueOrBlank_(payload.bonusPoints),
+    Q1_CorrectPlus: String(payload.q1CorrectPlus || '').trim(),
+    Q1_CorrectPlus_Points: toNumberOrDefault_(payload.q1CorrectPlusPoints, 4),
+    Q1_CorrectMinus: String(payload.q1CorrectMinus || '').trim(),
+    Q1_CorrectMinus_Points: toNumberOrDefault_(payload.q1CorrectMinusPoints, -3)
+  };
+
+  let rowNumber = null;
+  for (let i = 0; i < rows.length; i++) {
+    if (Number(rows[i].Week || 0) === week) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  const values = headers.map(h => record[h] !== undefined ? record[h] : '');
+  if (rowNumber) {
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+
+  return { ok: true, message: `Results saved for Week ${week}.` };
+}
+
+function adminRecalculateScores(passcode) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  return recalculateScores();
+}
+
+function adminRecalculateScoresTrialRun() {
+  return recalculateScores();
+}
+
+function adminAdvanceWeek(passcode) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  return advanceWeek_();
+}
+
+function adminAdvanceWeekTrialRun() {
+  return advanceWeek_();
+}
+
+function advanceWeek_() {
+  const ss = SpreadsheetApp.getActive();
+  const configSheet = mustGetSheet_(ss, GAME_SHEETS_51.CONFIG);
+  const config = readConfig_(configSheet);
+  const nextWeek = Number(config.WeekNumber || 1) + 1;
+  setConfigValue_(configSheet, 'WeekNumber', nextWeek);
+  setConfigValue_(configSheet, 'VotingOpen', 'AUTO');
+  return { ok: true, message: `Advanced to Week ${nextWeek}. Voting reset to AUTO.` };
+}
+
+function adminAddBonus(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const week = Number(payload.week || 0);
+  const player = String(payload.player || '').trim();
+  const points = Number(payload.points || 0);
+  const reason = String(payload.reason || '').trim();
+
+  if (!week) throw new Error('Missing week.');
+  if (!player) throw new Error('Missing player.');
+  if (!reason) throw new Error('Missing reason.');
+
+  addOrUpdateBonusRow_(week, player, points, reason);
+  return { ok: true, message: 'Bonus points saved.' };
+}
+
+function verifyAdminPasscodeOrThrow_(passcode) {
+  if (typeof verifyAdminPasscode !== 'function') {
+    throw new Error('verifyAdminPasscode() is not available.');
+  }
+  if (!verifyAdminPasscode(passcode)) {
+    throw new Error('Invalid admin passcode.');
+  }
+}
+
+/* =========================
+   PHOTO UPLOAD
+========================= */
+
+function uploadTribePhoto(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
+  const week = Number(payload.week || config.WeekNumber || 1);
+  const name = String(payload.name || 'Admin').trim();
+  const email = String(payload.email || '').trim();
+  const caption = String(payload.caption || '').trim();
+  const dataUrl = String(payload.dataUrl || '').trim();
+  const mimeType = String(payload.mimeType || '').trim();
+  const fileName = String(payload.fileName || `tribe-photo-week-${week}`).trim();
+
+  if (!name) throw new Error('Please enter an uploader name.');
+  if (!dataUrl) throw new Error('Please choose a photo.');
+  if (!mimeType || mimeType.indexOf('image/') !== 0) throw new Error('Only image uploads are allowed.');
+
+  const base64 = dataUrl.split(',')[1];
+  if (!base64) throw new Error('Invalid image data.');
+
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, mimeType, sanitizeFileName_(fileName));
+
+  const folderId = String(config.PhotoDriveFolderId || '').trim();
+  const folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
+  const file = folder.createFile(blob);
+
+  const photoSheet = mustGetSheet_(ss, GAME_SHEETS_51.PHOTOS);
+  photoSheet.appendRow([
+    new Date(),
+    week,
+    name,
+    email,
+    caption,
+    file.getUrl(),
+    file.getId(),
+    'TRUE'
+  ]);
+
+  return {
+    ok: true,
+    message: 'Admin snapshot has been added to camp.',
+    photoUrl: file.getUrl()
+  };
+}
+
+/* =========================
+   SHARED HELPERS
+========================= */
+
+function ensureSheetWithHeaders_(ss, sheetName, headers) {
+  const sheet = getOrCreateSheet_(ss, sheetName);
+  const existingHeaders = sheet.getLastRow() > 0 ? getHeaders_(sheet) : [];
+  const matches =
+    existingHeaders.length === headers.length &&
+    headers.every((h, i) => h === existingHeaders[i]);
+
+  if (!matches) {
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+}
+
+function getOrCreateSheet_(ss, name) {
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function mustGetSheet_(ss, name) {
+  const sh = ss.getSheetByName(name);
+  if (!sh) throw new Error(`Missing required sheet: ${name}`);
+  return sh;
+}
+
+function readConfig_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  const out = {};
+  for (let i = 1; i < values.length; i++) {
+    const key = String(values[i][0] || '').trim();
+    if (!key) continue;
+    out[key] = values[i][1];
+  }
+  return out;
+}
+
+function readTable_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(String);
+  return values.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+}
+
+function getHeaders_(sheet) {
+  if (sheet.getLastRow() === 0) return [];
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+}
+
+function setConfigValue_(sheet, key, value) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0] || '').trim() === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      return;
+    }
+  }
+  sheet.appendRow([key, value]);
+}
+
+function splitList_(value) {
+  return String(value || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function pickRandom_(arr) {
+  if (!arr || !arr.length) return '';
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function normalizeAnswer51_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeEmail51_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isActiveCastStatus51_(value) {
+  const status = String(value || '').trim().toLowerCase();
+  return !status || status === 'in' || status === 'active';
+}
+
+function normName_(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normNameDisplay_(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function nameKey51_(value) {
+  return normName_(value);
+}
+
+function denseRank51_(values) {
+  const ranks = [];
+  let currentRank = 0;
+  let lastValue = null;
+  values.forEach(v => {
+    if (lastValue === null || v !== lastValue) {
+      currentRank += 1;
+      lastValue = v;
+    }
+    ranks.push(currentRank);
+  });
+  return ranks;
+}
+
+function toNumberOrDefault_(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function pointValueOrBlank_(value) {
+  if (String(value ?? '').trim() === '') return '';
+  return toNumberOrDefault_(value, 0);
+}
+
+function parseTimeToMinutes_(value) {
+  const s = String(value || '').trim().toUpperCase();
+  if (!s) return null;
+
+  let m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (m) {
+    let hour = Number(m[1]);
+    const minute = Number(m[2]);
+    const meridiem = m[3];
+    if (hour === 12) hour = 0;
+    if (meridiem === 'PM') hour += 12;
+    return hour * 60 + minute;
+  }
+
+  m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  return null;
+}
+
+function dayNameToNum_(value) {
+  const dayMap = {
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 7
+  };
+  return dayMap[String(value || '').trim().toLowerCase()] || null;
+}
+
+function sanitizeFileName_(value) {
+  return String(value || 'upload')
+    .replace(/[^\w.\- ]+/g, '')
+    .trim() || 'upload';
+}

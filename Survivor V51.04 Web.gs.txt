@@ -1,0 +1,1337 @@
+const APP_SHEETS_51 = {
+  CONFIG: GAME_SHEETS_51.CONFIG,
+  PLAYERS: GAME_SHEETS_51.PLAYERS,
+  CAST: GAME_SHEETS_51.CAST,
+  PICKS: GAME_SHEETS_51.PICKS,
+  SCORES: GAME_SHEETS_51.SCORES,
+  RECAPS: GAME_SHEETS_51.WEEKRECAPS,
+  BONUSES: GAME_SHEETS_51.PLAYERBONUSES,
+  PHOTOS: GAME_SHEETS_51.PHOTOS,
+  QUESTIONWEEKS: GAME_SHEETS_51.QUESTIONWEEKS
+};
+
+const QUESTION_CONFIG_FIELDS_51 = [
+  'Q1', 'Q1Type', 'Q1Options',
+  'Q2', 'Q2Type', 'Q2Options',
+  'Q3', 'Q3Type', 'Q3Options',
+  'Q4', 'Q4Type', 'Q4Options',
+  'Q5', 'Q5Type', 'Q5Options',
+  'Q6', 'Q6Type', 'Q6Options',
+  'BonusQ', 'BonusType', 'BonusOptions',
+  'CommentPromptTemplate'
+];
+
+function doGet() {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('The Tribal Ledger')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/* =========================
+   APP DATA
+========================= */
+
+function getAppData() {
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const castRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAST));
+  const playerRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+
+  const voting = getVotingStatus_(config, timezone);
+  const reveal = getRevealStatus_(config, timezone);
+  const episode = getEpisodeStatus_(config, timezone);
+  const currentWeek = Number(config.WeekNumber || 1);
+  const questionConfig = getQuestionConfigForWeek_(currentWeek, config);
+  const questions = getQuestionDefinitions_(questionConfig, castRows);
+
+  return {
+    seasonName: String(config.SeasonName || 'Survivor Season 51'),
+    ledgerTitle: String(config.TribeLedgerTitle || 'The Tribal Ledger'),
+    ledgerSubtitle: String(config.TribeLedgerSubtitle || 'Outwit • Outplay • Outlast • Outscore'),
+    weekNumber: currentWeek,
+    timezone,
+    voting,
+    reveal,
+    episode,
+    questions,
+    leaderboard: getLeaderboardData_(),
+    recap: getLatestRecap_(config, timezone),
+    weeklyUpdates: getWeeklyUpdates_(config, timezone),
+    tribePhotos: getApprovedTribePhotos_(currentWeek, config, timezone),
+    castGrid: getCastGrid_(castRows),
+    contentBlocks: {
+      campAnnouncementsTitle: sanitizeHtml_(String(config.CampAnnouncementsTitle || 'Camp Announcements')),
+      campAnnouncements: [
+        sanitizeHtml_(String(config.CampAnnouncement1 || '').trim()),
+        sanitizeHtml_(String(config.CampAnnouncement2 || '').trim()),
+        sanitizeHtml_(String(config.CampAnnouncement3 || '').trim())
+      ].filter(Boolean),
+      atAGlanceTitle: getCampRulesTitle_(config),
+      atAGlance: [
+        sanitizeHtml_(String(config.AtAGlance1 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance2 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance3 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance4 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance5 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance6 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance7 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance8 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance9 || '').trim()),
+        sanitizeHtml_(String(config.AtAGlance10 || '').trim())
+      ].filter(Boolean)
+    },
+    photoUpload: {
+      title: String(config.PhotoUploadTitle || 'Tribe Snapshots'),
+      instructions: String(config.PhotoUploadInstructions || 'Drop your Survivor-themed photo here for the tribe.')
+    },
+    players: playerRows
+      .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE')
+      .map(p => ({
+        name: String(p.Name || '').trim(),
+        email: String(p.Email || '').trim(),
+        photoUrl: String(p.PhotoUrl || '').trim()
+      }))
+  };
+}
+
+function getQuestionDefinitions_(config, castRows) {
+  const activeCast = (castRows || [])
+    .filter(r => isActiveCastStatus_(r.Status))
+    .map(r => ({
+      value: String(r.Name || '').trim(),
+      label: String(r.Name || '').trim(),
+      photoUrl: String(r.PhotoUrl || '').trim(),
+      team: String(r.Team || '').trim(),
+      teamPhotoUrl: String(r.TeamPhotoUrl || '').trim()
+    }))
+    .filter(r => r.value)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const teams = splitList_(config.Teams);
+  const teamPhotoMap = buildTeamPhotoMap_(config);
+
+  const questions = [];
+
+  for (let i = 1; i <= 6; i++) {
+    const prompt = sanitizeHtml_(String(config[`Q${i}`] || '').trim());
+    if (!prompt) continue;
+
+    const type = String(config[`Q${i}Type`] || 'cast').trim().toLowerCase();
+    const customOptions = splitList_(config[`Q${i}Options`]);
+
+    questions.push({
+      key: `q${i}`,
+      prompt,
+      type,
+      required: true,
+      options: buildOptionsForType_(type, activeCast, teams, teamPhotoMap, customOptions)
+    });
+  }
+
+  const bonusPrompt = String(config.BonusQ || '').trim();
+  if (bonusPrompt) {
+    const type = String(config.BonusType || 'cast').trim().toLowerCase();
+    const customOptions = splitList_(config.BonusOptions);
+    questions.push({
+      key: 'bonus',
+      prompt: bonusPrompt,
+      type,
+      required: true,
+      options: buildOptionsForType_(type, activeCast, teams, teamPhotoMap, customOptions)
+    });
+  }
+
+  const commentPrompt = String(config.CommentPromptTemplate || '').trim();
+  if (commentPrompt) {
+    questions.push({
+      key: 'comment',
+      prompt: commentPrompt,
+      type: 'text',
+      required: true
+    });
+  }
+
+  return questions;
+}
+
+function getQuestionConfigForWeek_(week, fallbackConfig) {
+  const base = Object.assign({}, fallbackConfig || {});
+  const weekNumber = Number(week || base.WeekNumber || 1);
+  const saved = getSavedQuestionWeekConfig_(weekNumber);
+  if (saved) return mergeQuestionConfig_(base, saved);
+
+  const snapshot = getQuestionConfigFromPicks_(weekNumber);
+  if (snapshot) return mergeQuestionConfig_(base, snapshot);
+
+  return base;
+}
+
+function mergeQuestionConfig_(baseConfig, questionConfig) {
+  const merged = Object.assign({}, baseConfig || {});
+  QUESTION_CONFIG_FIELDS_51.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(questionConfig, field)) {
+      merged[field] = questionConfig[field];
+    }
+  });
+  return merged;
+}
+
+function getSavedQuestionWeekConfig_(week) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName(APP_SHEETS_51.QUESTIONWEEKS);
+  if (!sheet) return null;
+
+  const rows = readTable_(sheet);
+  const row = rows.find(r => Number(r.Week || 0) === Number(week));
+  if (!row) return null;
+
+  const config = {};
+  QUESTION_CONFIG_FIELDS_51.forEach(field => {
+    config[field] = row[field] !== undefined ? row[field] : '';
+  });
+  return config;
+}
+
+function getQuestionConfigFromPicks_(week) {
+  const ss = SpreadsheetApp.getActive();
+  const picksSheet = ss.getSheetByName(APP_SHEETS_51.PICKS);
+  if (!picksSheet) return null;
+
+  const rows = readTable_(picksSheet)
+    .filter(r => Number(r.Week || 0) === Number(week));
+  if (!rows.length) return null;
+
+  const sample = rows.find(r => {
+    for (let i = 1; i <= 6; i++) {
+      if (String(r[`Q${i}_Label`] || '').trim()) return true;
+    }
+    return String(r.Bonus_Label || r.Comment_Label || '').trim();
+  });
+  if (!sample) return null;
+
+  const config = {};
+  for (let i = 1; i <= 6; i++) {
+    config[`Q${i}`] = String(sample[`Q${i}_Label`] || '').trim();
+    config[`Q${i}Type`] = '';
+    config[`Q${i}Options`] = '';
+  }
+  config.BonusQ = String(sample.Bonus_Label || '').trim();
+  config.BonusType = '';
+  config.BonusOptions = '';
+  config.CommentPromptTemplate = String(sample.Comment_Label || '').trim();
+  return config;
+}
+
+function ensureQuestionWeeksSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  return ensureSheetWithHeaders_(ss, APP_SHEETS_51.QUESTIONWEEKS, GAME_HEADERS_51.QUESTIONWEEKS);
+}
+
+function upsertQuestionWeekConfig_(week, questionConfig) {
+  const sheet = ensureQuestionWeeksSheet_();
+  const headers = getHeaders_(sheet);
+  const rows = readTable_(sheet);
+  const targetWeek = Number(week || 0);
+  let rowNumber = null;
+
+  for (let i = 0; i < rows.length; i++) {
+    if (Number(rows[i].Week || 0) === targetWeek) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  const record = { Week: targetWeek };
+  QUESTION_CONFIG_FIELDS_51.forEach(field => {
+    record[field] = questionConfig[field] !== undefined ? questionConfig[field] : '';
+  });
+
+  const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+  if (rowNumber) {
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+}
+
+function buildOptionsForType_(type, activeCast, teams, teamPhotoMap, customOptions) {
+  if (type === 'teams') {
+    return teams.map(team => ({
+      value: team,
+      label: team,
+      photoUrl: teamPhotoMap[team] || '',
+      team: team
+    }));
+  }
+  if (type === 'custom') {
+    return customOptions.map(v => ({ value: v, label: v, photoUrl: '', team: '' }));
+  }
+  return activeCast;
+}
+
+function normalizeQuestionType_(value) {
+  const type = String(value || 'cast').trim().toLowerCase();
+  return ['cast', 'teams', 'custom'].includes(type) ? type : 'cast';
+}
+
+function getCastGrid_(castRows) {
+  return (castRows || [])
+    .map(r => {
+      const status = normalizeCastStatus_(r.Status);
+      const name = String(r.Name || '').trim();
+      return {
+        name,
+        status,
+        statusLabel: getCastStatusLabel_(status),
+        photoUrl: String(r.PhotoUrl || '').trim(),
+        team: String(r.Team || '').trim()
+      };
+    })
+    .filter(r => r.name)
+    .sort((a, b) => {
+      const statusOrder = { active: 1, finalist: 2, jury: 3, eliminated: 4 };
+      const aOrder = statusOrder[a.status] || 5;
+      const bOrder = statusOrder[b.status] || 5;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function normalizeCastStatus_(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (!status || status === 'in' || status === 'active') return 'active';
+  if (status === 'out' || status === 'eliminated' || status === 'voted out') return 'eliminated';
+  if (status === 'jury' || status === 'juror') return 'jury';
+  if (status === 'final' || status === 'finalist') return 'finalist';
+  return status.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'active';
+}
+
+function isActiveCastStatus_(value) {
+  const status = String(value || '').trim().toLowerCase();
+  return !status || status === 'in' || status === 'active';
+}
+
+function getCastStatusLabel_(status) {
+  const labels = {
+    active: 'ACTIVE',
+    eliminated: 'ELIMINATED',
+    jury: 'JURY',
+    finalist: 'FINALIST'
+  };
+  return labels[status] || String(status || 'active').replace(/-/g, ' ').toUpperCase();
+}
+
+function buildTeamPhotoMap_(config) {
+  const teams = splitList_(config.Teams);
+  const photos = splitList_(config.TeamPhotos);
+  const map = {};
+  teams.forEach((t, i) => map[t] = photos[i] || '');
+  return map;
+}
+
+/* =========================
+   SUBMISSIONS
+========================= */
+
+function submitPicks(payload) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    validateSubmissionPayload_(payload, false);
+
+    const ss = SpreadsheetApp.getActive();
+    const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+    const timezone = String(config.Timezone || 'America/Los_Angeles');
+    const voting = getVotingStatus_(config, timezone);
+
+    if (!voting.isOpen) {
+      throw new Error('Voting is currently closed for this week.');
+    }
+
+    payload.SubmittedByAdmin = 'FALSE';
+    payload.AutoAssigned = 'FALSE';
+    payload.PenaltyApplied = 'FALSE';
+
+    upsertPickRecord_(payload, { allowAdminEdit: false, markAutoAssigned: false });
+
+    return {
+      ok: true,
+      message: '🔥 Your torch is lit. Your vote has been cast.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminEditSubmission(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  validateSubmissionPayload_(payload, true);
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    payload.SubmittedByAdmin = 'TRUE';
+    payload.AutoAssigned = String(payload.AutoAssigned || 'FALSE');
+    payload.PenaltyApplied = String(payload.PenaltyApplied || 'FALSE');
+
+    upsertPickRecord_(payload, { allowAdminEdit: true, markAutoAssigned: String(payload.AutoAssigned) === 'TRUE' });
+
+    return {
+      ok: true,
+      message: 'Submission updated by admin.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function upsertPickRecord_(payload, options) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.PICKS);
+  const headers = getHeaders_(sheet);
+  const rows = readTable_(sheet);
+
+  const week = Number(payload.week || 0);
+  const playerName = String(payload.name || '').trim();
+  const key = `${week}||${nameKey51_(playerName)}`;
+
+  let existingRowNumber = null;
+  let latestTs = -Infinity;
+
+  rows.forEach((row, idx) => {
+    const rowKey = `${Number(row.Week || 0)}||${nameKey51_(row.Name)}`;
+    if (rowKey !== key) return;
+    const ts = new Date(row.Timestamp || 0).getTime();
+    if (ts >= latestTs) {
+      latestTs = ts;
+      existingRowNumber = idx + 2;
+    }
+  });
+
+  const record = {
+    Timestamp: new Date(),
+    Week: week,
+    Name: playerName,
+    Email: String(payload.email || '').trim(),
+    Q1_Label: String(payload.q1Label || ''),
+    Q1_Pick: String(payload.q1Pick || ''),
+    Q2_Label: String(payload.q2Label || ''),
+    Q2_Pick: String(payload.q2Pick || ''),
+    Q3_Label: String(payload.q3Label || ''),
+    Q3_Pick: String(payload.q3Pick || ''),
+    Q4_Label: String(payload.q4Label || ''),
+    Q4_Pick: String(payload.q4Pick || ''),
+    Q5_Label: String(payload.q5Label || ''),
+    Q5_Pick: String(payload.q5Pick || ''),
+    Q6_Label: String(payload.q6Label || ''),
+    Q6_Pick: String(payload.q6Pick || ''),
+    Bonus_Label: String(payload.bonusLabel || ''),
+    Bonus_Pick: String(payload.bonusPick || ''),
+    Comment_Label: String(payload.commentLabel || ''),
+    Comment_Text: String(payload.commentText || ''),
+    SubmittedByAdmin: String(payload.SubmittedByAdmin || 'FALSE'),
+    AutoAssigned: String(payload.AutoAssigned || 'FALSE'),
+    PenaltyApplied: String(payload.PenaltyApplied || 'FALSE')
+  };
+
+  const values = headers.map(h => record[h] !== undefined ? record[h] : '');
+
+  if (existingRowNumber) {
+    sheet.getRange(existingRowNumber, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+}
+
+function validateSubmissionPayload_(payload, isAdmin) {
+  if (!payload) throw new Error('Missing submission payload.');
+
+  const name = String(payload.name || '').trim();
+  const week = Number(payload.week || 0);
+
+  if (!name) throw new Error('Please enter your name.');
+  if (!week) throw new Error('Missing week number.');
+
+  ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'bonus'].forEach(key => {
+    const label = String(payload[`${key}Label`] || '').trim();
+    if (!label) return;
+    const pick = String(payload[`${key}Pick`] || '').trim();
+    if (!pick) throw new Error(`Please answer: ${label}`);
+  });
+
+  const commentLabel = String(payload.commentLabel || payload.commentPrompt || '').trim();
+  if (commentLabel && !String(payload.commentText || '').trim()) {
+    throw new Error(`Please answer: ${commentLabel}`);
+  }
+
+  if (!isAdmin) {
+    const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+    const castRows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CAST));
+    const questionConfig = getQuestionConfigForWeek_(week, config);
+    getQuestionDefinitions_(questionConfig, castRows).forEach(q => {
+      const label = stripHtmlForValidation_(q.prompt);
+      if (q.type === 'text') {
+        if (!String(payload[`${q.key}Text`] || payload.commentText || '').trim()) {
+          throw new Error(`Please answer: ${label}`);
+        }
+      } else if (!String(payload[`${q.key}Pick`] || '').trim()) {
+        throw new Error(`Please answer: ${label}`);
+      }
+    });
+
+    const players = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
+      .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE');
+
+    const allowed = new Set(players.map(p => nameKey51_(p.Name)));
+    if (players.length && !allowed.has(nameKey51_(name))) {
+      throw new Error('Name not found on the tribe roster.');
+    }
+  }
+}
+
+function getPlayerSubmission(name, week) {
+  const safeName = String(name || '').trim();
+  const safeWeek = Number(week || 0);
+  if (!safeName || !safeWeek) return null;
+
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PICKS));
+  const key = nameKey51_(safeName);
+  let latest = null;
+  let latestTs = -Infinity;
+
+  rows.forEach(row => {
+    if (Number(row.Week || 0) !== safeWeek) return;
+    if (nameKey51_(row.Name) !== key) return;
+
+    const ts = new Date(row.Timestamp || 0).getTime();
+    if (ts >= latestTs) {
+      latestTs = ts;
+      latest = row;
+    }
+  });
+
+  if (!latest) return null;
+
+  return {
+    name: String(latest.Name || ''),
+    email: String(latest.Email || ''),
+    questions: [
+      { label: String(latest.Q1_Label || ''), pick: String(latest.Q1_Pick || '') },
+      { label: String(latest.Q2_Label || ''), pick: String(latest.Q2_Pick || '') },
+      { label: String(latest.Q3_Label || ''), pick: String(latest.Q3_Pick || '') },
+      { label: String(latest.Q4_Label || ''), pick: String(latest.Q4_Pick || '') },
+      { label: String(latest.Q5_Label || ''), pick: String(latest.Q5_Pick || '') },
+      { label: String(latest.Q6_Label || ''), pick: String(latest.Q6_Pick || '') },
+      { label: String(latest.Bonus_Label || ''), pick: String(latest.Bonus_Pick || '') },
+      { label: String(latest.Comment_Label || ''), pick: String(latest.Comment_Text || '') }
+    ].filter(q => q.label || q.pick)
+  };
+}
+
+/* =========================
+   ADMIN
+========================= */
+
+function verifyAdminPasscode(passcode) {
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  const actual = String(config.AdminPasscode || '').trim();
+  return !!actual && String(passcode || '').trim() === actual;
+}
+
+function getAdminDashboard(passcode) {
+  verifyAdminPasscodeOrThrow_(passcode);
+
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const voting = getVotingStatus_(config, timezone);
+  const reveal = getRevealStatus_(config, timezone);
+  const recap = getLatestRecap_(config, timezone);
+
+  return {
+    weekNumber: Number(config.WeekNumber || 1),
+    votingStatus: voting.statusText,
+    deadlineLabel: voting.deadlineLabel,
+    revealLabel: reveal.revealLabel,
+    submissionsCount: getSubmissionCountForWeek_(Number(config.WeekNumber || 1)),
+    latestRecapTitle: recap.title || '',
+    scoresSummary: getScoresSummary_(),
+    contentBlocks: getAdminContentBlocks(passcode)
+  };
+}
+
+function adminSetVotingOpen(passcode, isOpen) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
+  setConfigValue_(configSheet, 'VotingOpen', isOpen ? 'TRUE' : 'FALSE');
+  return { ok: true, message: isOpen ? 'Voting is now OPEN.' : 'Voting is now CLOSED.' };
+}
+
+function adminSaveRecap(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+
+  const sheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.RECAPS);
+  const headers = getHeaders_(sheet);
+  const rows = readTable_(sheet);
+
+  const week = Number(payload.week || 0);
+  const title = String(payload.title || '').trim();
+  const recapHtml = sanitizeHtml_(String(payload.body || ''));
+
+  if (!week) throw new Error('Missing week number.');
+  if (!recapHtml.trim()) throw new Error('Please enter recap text.');
+
+  let rowNumber = null;
+  for (let i = 0; i < rows.length; i++) {
+    if (Number(rows[i].Week || 0) === week) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+
+  const record = {
+    Week: week,
+    Title: title || `Week ${week} Recap`,
+    RecapHtml: recapHtml
+  };
+  const values = headers.map(h => record[h] !== undefined ? record[h] : '');
+
+  if (rowNumber) {
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+
+  return { ok: true, message: `Week ${week} recap saved.` };
+}
+
+function getAdminContentBlocks(passcode, questionWeek) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  const week = Number(questionWeek || config.WeekNumber || 1);
+  const questionConfig = getQuestionConfigForWeek_(week, config);
+  const savedQuestionConfig = getSavedQuestionWeekConfig_(week);
+
+  return {
+    questionWeek: week,
+    hasSavedQuestionWeek: !!savedQuestionConfig,
+    q1: sanitizeHtml_(String(questionConfig.Q1 || '')),
+    q2: sanitizeHtml_(String(questionConfig.Q2 || '')),
+    q3: sanitizeHtml_(String(questionConfig.Q3 || '')),
+    q4: sanitizeHtml_(String(questionConfig.Q4 || '')),
+    q5: sanitizeHtml_(String(questionConfig.Q5 || '')),
+    q6: sanitizeHtml_(String(questionConfig.Q6 || '')),
+    q1Type: normalizeQuestionType_(questionConfig.Q1Type),
+    q1Options: String(questionConfig.Q1Options || ''),
+    q2Type: normalizeQuestionType_(questionConfig.Q2Type),
+    q2Options: String(questionConfig.Q2Options || ''),
+    q3Type: normalizeQuestionType_(questionConfig.Q3Type),
+    q3Options: String(questionConfig.Q3Options || ''),
+    q4Type: normalizeQuestionType_(questionConfig.Q4Type),
+    q4Options: String(questionConfig.Q4Options || ''),
+    q5Type: normalizeQuestionType_(questionConfig.Q5Type),
+    q5Options: String(questionConfig.Q5Options || ''),
+    q6Type: normalizeQuestionType_(questionConfig.Q6Type),
+    q6Options: String(questionConfig.Q6Options || ''),
+    commentPromptTemplate: String(questionConfig.CommentPromptTemplate || 'Campfire Thoughts'),
+    campAnnouncementsTitle: sanitizeHtml_(String(config.CampAnnouncementsTitle || 'Camp Announcements')),
+    campAnnouncement1: sanitizeHtml_(String(config.CampAnnouncement1 || '')),
+    campAnnouncement2: sanitizeHtml_(String(config.CampAnnouncement2 || '')),
+    campAnnouncement3: sanitizeHtml_(String(config.CampAnnouncement3 || '')),
+    atAGlanceTitle: getCampRulesTitle_(config),
+    atAGlance1: sanitizeHtml_(String(config.AtAGlance1 || '')),
+    atAGlance2: sanitizeHtml_(String(config.AtAGlance2 || '')),
+    atAGlance3: sanitizeHtml_(String(config.AtAGlance3 || '')),
+    atAGlance4: sanitizeHtml_(String(config.AtAGlance4 || '')),
+    atAGlance5: sanitizeHtml_(String(config.AtAGlance5 || '')),
+    atAGlance6: sanitizeHtml_(String(config.AtAGlance6 || '')),
+    atAGlance7: sanitizeHtml_(String(config.AtAGlance7 || '')),
+    atAGlance8: sanitizeHtml_(String(config.AtAGlance8 || '')),
+    atAGlance9: sanitizeHtml_(String(config.AtAGlance9 || '')),
+    atAGlance10: sanitizeHtml_(String(config.AtAGlance10 || ''))
+  };
+}
+
+function getAdminQuestionWeek(passcode, week) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  const targetWeek = Number(week || config.WeekNumber || 1);
+  if (!targetWeek) throw new Error('Choose a valid week number.');
+
+  return {
+    ok: true,
+    week: targetWeek,
+    contentBlocks: getAdminContentBlocks(passcode, targetWeek)
+  };
+}
+
+function adminSaveContentBlocks(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+
+  const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
+  const config = readConfig_(configSheet);
+  const currentWeek = Number(config.WeekNumber || 1);
+  const questionWeek = Number(payload.questionWeek || payload.week || currentWeek);
+  if (!questionWeek) throw new Error('Choose a valid week number.');
+
+  const questionConfig = {
+    Q1: sanitizeHtml_(String(payload.q1 || '').trim()),
+    Q2: sanitizeHtml_(String(payload.q2 || '').trim()),
+    Q3: sanitizeHtml_(String(payload.q3 || '').trim()),
+    Q4: sanitizeHtml_(String(payload.q4 || '').trim()),
+    Q5: sanitizeHtml_(String(payload.q5 || '').trim()),
+    Q6: sanitizeHtml_(String(payload.q6 || '').trim()),
+    Q1Type: normalizeQuestionType_(payload.q1Type),
+    Q1Options: String(payload.q1Options || '').trim(),
+    Q2Type: normalizeQuestionType_(payload.q2Type),
+    Q2Options: String(payload.q2Options || '').trim(),
+    Q3Type: normalizeQuestionType_(payload.q3Type),
+    Q3Options: String(payload.q3Options || '').trim(),
+    Q4Type: normalizeQuestionType_(payload.q4Type),
+    Q4Options: String(payload.q4Options || '').trim(),
+    Q5Type: normalizeQuestionType_(payload.q5Type),
+    Q5Options: String(payload.q5Options || '').trim(),
+    Q6Type: normalizeQuestionType_(payload.q6Type),
+    Q6Options: String(payload.q6Options || '').trim(),
+    BonusQ: sanitizeHtml_(String(payload.bonusQ || config.BonusQ || '').trim()),
+    BonusType: normalizeQuestionType_(payload.bonusType || config.BonusType),
+    BonusOptions: String(payload.bonusOptions || config.BonusOptions || '').trim(),
+    CommentPromptTemplate: String(payload.commentPromptTemplate || '').trim()
+  };
+
+  upsertQuestionWeekConfig_(questionWeek, questionConfig);
+
+  if (questionWeek === currentWeek) {
+    Object.keys(questionConfig).forEach(key => setConfigValue_(configSheet, key, questionConfig[key]));
+  }
+
+  setConfigValue_(configSheet, 'CampAnnouncementsTitle', sanitizeHtml_(String(payload.campAnnouncementsTitle || '').trim()));
+  setConfigValue_(configSheet, 'CampAnnouncement1', sanitizeHtml_(String(payload.campAnnouncement1 || '').trim()));
+  setConfigValue_(configSheet, 'CampAnnouncement2', sanitizeHtml_(String(payload.campAnnouncement2 || '').trim()));
+  setConfigValue_(configSheet, 'CampAnnouncement3', sanitizeHtml_(String(payload.campAnnouncement3 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlanceTitle', sanitizeHtml_(String(payload.atAGlanceTitle || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance1', sanitizeHtml_(String(payload.atAGlance1 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance2', sanitizeHtml_(String(payload.atAGlance2 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance3', sanitizeHtml_(String(payload.atAGlance3 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance4', sanitizeHtml_(String(payload.atAGlance4 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance5', sanitizeHtml_(String(payload.atAGlance5 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance6', sanitizeHtml_(String(payload.atAGlance6 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance7', sanitizeHtml_(String(payload.atAGlance7 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance8', sanitizeHtml_(String(payload.atAGlance8 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance9', sanitizeHtml_(String(payload.atAGlance9 || '').trim()));
+  setConfigValue_(configSheet, 'AtAGlance10', sanitizeHtml_(String(payload.atAGlance10 || '').trim()));
+
+  return { ok: true, week: questionWeek, message: `Week ${questionWeek} questions and camp content updated.` };
+}
+
+/* =========================
+   VIEWS / DATA TABLES
+========================= */
+
+function getLeaderboardData_() {
+  const sheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.SCORES);
+  const rows = readTable_(sheet);
+  if (!rows.length) return getUnscoredLeaderboardData_();
+
+  const latestByPlayer = {};
+  rows.forEach((row, index) => {
+    const name = String(row.Name || '').trim();
+    if (!name) return;
+    const key = nameKey51_(name);
+    const week = Number(row.Week || 0);
+    const existing = latestByPlayer[key];
+    if (!existing || week > existing._week || (week === existing._week && index > existing._index)) {
+      latestByPlayer[key] = {
+        _week: week,
+        _index: index,
+        rank: Number(row.Rank || 0),
+        name,
+        weekPoints: Number(row.WeekPoints || 0),
+        total: Number(row.RunningTotal || 0)
+      };
+    }
+  });
+
+  const list = Object.keys(latestByPlayer).map(k => latestByPlayer[k]);
+  list.sort((a, b) => {
+    if (a.rank && b.rank) return a.rank - b.rank;
+    if (b.total !== a.total) return b.total - a.total;
+    return a.name.localeCompare(b.name);
+  });
+
+  const maxWeek = list.reduce((m, r) => Math.max(m, Number(r._week || 0)), 0);
+  return {
+    week: maxWeek || null,
+    rows: list.map(r => ({
+      rank: r.rank || '',
+      name: r.name,
+      weekPoints: r.weekPoints,
+      total: r.total
+    }))
+  };
+}
+
+function getUnscoredLeaderboardData_() {
+  const players = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
+    .filter(player => String(player.Active || '').trim().toUpperCase() !== 'FALSE')
+    .map(player => String(player.Name || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    week: null,
+    rows: players.map((name, index) => ({
+      rank: index + 1,
+      name,
+      weekPoints: 0,
+      total: 0
+    }))
+  };
+}
+
+function getLatestRecap_(config, timezone) {
+  const updates = getWeeklyUpdates_(config, timezone);
+  if (!updates.length) {
+    return {
+      week: null,
+      title: '',
+      body: '<p>Weekly recap coming soon.</p>',
+      photos: []
+    };
+  }
+
+  return updates[0];
+}
+
+function getWeeklyUpdates_(config, timezone) {
+  const ss = SpreadsheetApp.getActive();
+  const recapRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.RECAPS));
+  const photoAlbums = getApprovedTribePhotoAlbums_(config, timezone);
+  const photoByWeek = {};
+  photoAlbums.forEach(album => photoByWeek[Number(album.week || 0)] = album.photos || []);
+
+  const recapsByWeek = {};
+  recapRows.forEach((row, index) => {
+    const week = Number(row.Week || 0);
+    const body = String(row.RecapHtml || '').trim();
+    const title = String(row.Title || '').trim();
+    if (!body && !title) return;
+    if (config && !isEpisodeContentPublishedForWeek_(week, config, timezone)) return;
+
+    const existing = recapsByWeek[week];
+    if (!existing || index > existing._index) {
+      recapsByWeek[week] = {
+        _week: week,
+        _index: index,
+        week: week || null,
+        title: title || `Week ${week} Recap`,
+        body: body || '<p>Weekly recap coming soon.</p>',
+        photos: []
+      };
+    }
+  });
+
+  const weeks = Array.from(new Set([
+    ...Object.keys(recapsByWeek).map(Number),
+    ...Object.keys(photoByWeek).map(Number)
+  ])).filter(Boolean).sort((a, b) => b - a);
+
+  return weeks.map(week => {
+    const recap = recapsByWeek[week] || {
+      week,
+      title: `Week ${week} Recap`,
+      body: '<p>Weekly recap coming soon.</p>'
+    };
+
+    return {
+      week,
+      title: recap.title || `Week ${week} Recap`,
+      body: recap.body || '<p>Weekly recap coming soon.</p>',
+      photos: photoByWeek[week] || []
+    };
+  });
+}
+
+function getAvailablePickWeeks() {
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PICKS));
+  const weeks = Array.from(new Set(rows.map(r => Number(r.Week || 0)).filter(Boolean))).sort((a, b) => b - a);
+  return weeks;
+}
+
+function getEliteWeekPicks(week) {
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const reveal = getRevealStatus_(config, timezone);
+  const targetWeek = Number(week || config.WeekNumber || 1);
+
+  if (!reveal.isVisible && targetWeek === Number(config.WeekNumber || 1)) {
+    return {
+      hidden: true,
+      week: targetWeek,
+      headers: {},
+      columns: [],
+      rows: [],
+      correct: {}
+    };
+  }
+
+  const allPicks = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, APP_SHEETS_51.PICKS)), buildCanonicalNameMap_(readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS))));
+  const weekPicks = allPicks.filter(r => Number(r.Week || 0) === targetWeek);
+
+  const scoringRows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING));
+  const scores = readTable_(mustGetSheet_(ss, APP_SHEETS_51.SCORES)).filter(r => Number(r.Week || 0) === targetWeek);
+  const scoringRow = scoringRows.find(r => Number(r.Week || 0) === targetWeek) || null;
+
+  const scoreMap = new Map();
+  scores.forEach(r => {
+    scoreMap.set(nameKey51_(r.Name), {
+      weekPoints: Number(r.WeekPoints || 0),
+      total: Number(r.RunningTotal || 0),
+      rank: Number(r.Rank || 0)
+    });
+  });
+
+  const headers = buildEliteHeaders_(weekPicks);
+  const correct = buildCorrectMap_(scoringRow);
+  const columns = buildEliteQuestionColumns_(weekPicks, headers, correct);
+
+  const rows = weekPicks.map(row => {
+    const s = scoreMap.get(nameKey51_(row.Name)) || {};
+    return {
+      name: String(row.Name || ''),
+      email: String(row.Email || ''),
+      rank: s.rank || '',
+      weekPoints: s.weekPoints ?? '',
+      total: s.total ?? '',
+      autoAssigned: String(row.AutoAssigned || '').toUpperCase() === 'TRUE',
+      picks: {
+        q1: String(row.Q1_Pick || ''),
+        q2: String(row.Q2_Pick || ''),
+        q3: String(row.Q3_Pick || ''),
+        q4: String(row.Q4_Pick || ''),
+        q5: String(row.Q5_Pick || ''),
+        q6: String(row.Q6_Pick || ''),
+        bonus: String(row.Bonus_Pick || ''),
+        comment: String(row.Comment_Text || '')
+      }
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.rank && b.rank) return a.rank - b.rank;
+    return a.name.localeCompare(b.name);
+  });
+
+  return {
+    hidden: false,
+    week: targetWeek,
+    headers,
+    columns,
+    rows,
+    correct
+  };
+}
+
+function getSeasonResponsesTable() {
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const reveal = getRevealStatus_(config, timezone);
+
+  const players = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS));
+  const picks = dedupeLatestPicks_(
+    readTable_(mustGetSheet_(ss, APP_SHEETS_51.PICKS)),
+    buildCanonicalNameMap_(players)
+  );
+
+  const scoringRows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING));
+  const scoringMap = buildScoringMap_(scoringRows);
+
+  const currentWeek = Number(config.WeekNumber || 1);
+
+  const visiblePicks = picks.filter(r => {
+    const rowWeek = Number(r.Week || 0);
+    if (rowWeek < currentWeek) return true;
+    return reveal.isVisible;
+  });
+
+  const weeks = Array.from(new Set(visiblePicks.map(r => Number(r.Week || 0)).filter(Boolean)))
+    .sort((a, b) => a - b);
+
+  const questionKeys = [
+    { key: 'q1', labelCol: 'Q1_Label', pickCol: 'Q1_Pick', correctCol: 'Q1_Correct', pointsCol: 'Q1_Points' },
+    { key: 'q2', labelCol: 'Q2_Label', pickCol: 'Q2_Pick', correctCol: 'Q2_Correct', pointsCol: 'Q2_Points' },
+    { key: 'q3', labelCol: 'Q3_Label', pickCol: 'Q3_Pick', correctCol: 'Q3_Correct', pointsCol: 'Q3_Points' },
+    { key: 'q4', labelCol: 'Q4_Label', pickCol: 'Q4_Pick', correctCol: 'Q4_Correct', pointsCol: 'Q4_Points' },
+    { key: 'q5', labelCol: 'Q5_Label', pickCol: 'Q5_Pick', correctCol: 'Q5_Correct', pointsCol: 'Q5_Points' },
+    { key: 'q6', labelCol: 'Q6_Label', pickCol: 'Q6_Pick', correctCol: 'Q6_Correct', pointsCol: 'Q6_Points' },
+    { key: 'bonus', labelCol: 'Bonus_Label', pickCol: 'Bonus_Pick', correctCol: 'Bonus_Correct', pointsCol: 'Bonus_Points' }
+  ];
+
+  const columns = [];
+
+  weeks.forEach(week => {
+    const weekRows = visiblePicks.filter(r => Number(r.Week || 0) === week);
+    const scoring = scoringMap[week] || {};
+
+    questionKeys.forEach(q => {
+      if (!hasAssignedPointValue_(scoring[q.pointsCol])) return;
+
+      const sample = weekRows.find(r => String(r[q.labelCol] || '').trim());
+      const label = sample ? String(sample[q.labelCol] || '').trim() : '';
+      if (!label) return;
+
+      columns.push({
+        week,
+        key: q.key,
+        label,
+        points: scoring[q.pointsCol],
+        pickCol: q.pickCol,
+        correct: normalizeCorrectList_(scoring[q.correctCol])
+      });
+    });
+  });
+
+  const playerNames = Array.from(new Set(visiblePicks.map(r => String(r.Name || '').trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
+
+  const pickIndex = new Map();
+  visiblePicks.forEach(r => {
+    pickIndex.set(`${Number(r.Week || 0)}||${nameKey51_(r.Name)}`, r);
+  });
+
+  const rows = playerNames.map(name => {
+    const cells = columns.map(col => {
+      const pickRow = pickIndex.get(`${col.week}||${nameKey51_(name)}`) || {};
+      const value = String(pickRow[col.pickCol] || '');
+      const normalized = value.trim().toLowerCase();
+      const correct = (col.correct || []).map(v => String(v || '').trim().toLowerCase());
+
+      return {
+        value,
+        isCorrect: !!value && correct.length && correct.includes(normalized)
+      };
+    });
+
+    return { name, cells };
+  });
+
+  return { weeks, columns, rows };
+}
+
+function getBonusLog() {
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.BONUSES));
+  return rows.map(r => ({
+    week: Number(r.Week || 0),
+    player: String(r.Player || ''),
+    points: Number(r.Points || 0),
+    reason: String(r.Reason || '')
+  }));
+}
+
+function getApprovedTribePhotos_(week, config, timezone) {
+  if (config && !isEpisodeContentPublishedForWeek_(week, config, timezone)) return [];
+
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PHOTOS))
+    .filter(r => String(r.Approved || '').trim().toUpperCase() !== 'FALSE')
+    .filter(r => Number(r.Week || 0) === Number(week || 0))
+    .sort((a, b) => new Date(b.Timestamp || 0) - new Date(a.Timestamp || 0));
+
+  return uniqueBy51_(rows.map(r => ({
+    name: String(r.Name || ''),
+    caption: String(r.Caption || ''),
+    photoUrl: String(r.PhotoUrl || '')
+  })), photo => normalizePhotoKey51_(photo));
+}
+
+function getApprovedTribePhotoAlbums_(config, timezone) {
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PHOTOS))
+    .filter(r => String(r.Approved || '').trim().toUpperCase() !== 'FALSE')
+    .filter(r => !config || isEpisodeContentPublishedForWeek_(Number(r.Week || 0), config, timezone))
+    .filter(r => Number(r.Week || 0) && String(r.PhotoUrl || '').trim())
+    .sort((a, b) => {
+      const weekDiff = Number(b.Week || 0) - Number(a.Week || 0);
+      if (weekDiff !== 0) return weekDiff;
+      return new Date(b.Timestamp || 0) - new Date(a.Timestamp || 0);
+    });
+
+  const byWeek = {};
+  rows.forEach(r => {
+    const week = Number(r.Week || 0);
+    if (!byWeek[week]) byWeek[week] = [];
+    byWeek[week].push({
+      name: String(r.Name || ''),
+      caption: String(r.Caption || ''),
+      photoUrl: String(r.PhotoUrl || ''),
+      timestamp: String(r.Timestamp || '')
+    });
+  });
+
+  return Object.keys(byWeek)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .map(week => ({
+      week,
+      title: `Week ${week}`,
+      photos: uniqueBy51_(byWeek[week], photo => normalizePhotoKey51_(photo))
+    }));
+}
+
+/* =========================
+   STATUS / TIME HELPERS
+========================= */
+
+function getVotingStatus_(config, timezone) {
+  const manual = String(config.VotingOpen || '').trim().toUpperCase();
+  const closeRule = parseRule_(config.CloseDay, config.CloseTime);
+  const now = new Date();
+
+  if (manual === 'TRUE' || manual === 'OPEN' || manual === 'YES') {
+    return {
+      isOpen: true,
+      statusText: 'Open',
+      deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
+      deadlineIso: computeNextOccurrenceIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes)
+    };
+  }
+
+  if (manual === 'FALSE' || manual === 'CLOSED' || manual === 'NO') {
+    return {
+      isOpen: false,
+      statusText: 'Closed',
+      deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
+      deadlineIso: computeNextOccurrenceIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes)
+    };
+  }
+
+  const nowDay = Number(Utilities.formatDate(now, timezone, 'u'));
+  const nowMinutes =
+    Number(Utilities.formatDate(now, timezone, 'H')) * 60 +
+    Number(Utilities.formatDate(now, timezone, 'm'));
+
+  const isOpen = nowDay < closeRule.dayNum || (nowDay === closeRule.dayNum && nowMinutes < closeRule.totalMinutes);
+
+  return {
+    isOpen,
+    statusText: isOpen ? 'Open' : 'Closed',
+    deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
+    deadlineIso: computeUpcomingOrCurrentIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes, isOpen)
+  };
+}
+
+function getRevealStatus_(config, timezone) {
+  const now = new Date();
+  const publishDay = config.EpisodeDay || config.RevealDay;
+  const publishTime = config.EpisodeTime || config.RevealTime;
+  const rule = parseRule_(publishDay, publishTime);
+  const nowDay = Number(Utilities.formatDate(now, timezone, 'u'));
+  const nowMinutes =
+    Number(Utilities.formatDate(now, timezone, 'H')) * 60 +
+    Number(Utilities.formatDate(now, timezone, 'm'));
+
+  const isVisible = nowDay > rule.dayNum || (nowDay === rule.dayNum && nowMinutes >= rule.totalMinutes);
+
+  return {
+    isVisible,
+    revealLabel: buildRuleLabel_(publishDay, publishTime),
+    revealIso: computeUpcomingOrCurrentIso_(now, timezone, rule.dayNum, rule.totalMinutes, !isVisible)
+  };
+}
+
+function getEpisodeStatus_(config, timezone) {
+  const now = new Date();
+  const rule = parseRule_(config.EpisodeDay, config.EpisodeTime);
+  return {
+    label: buildRuleLabel_(config.EpisodeDay, config.EpisodeTime),
+    nextEpisodeIso: computeNextOccurrenceIso_(now, timezone, rule.dayNum, rule.totalMinutes)
+  };
+}
+
+function parseRule_(day, time) {
+  const dayNum = dayNameToNum_(day);
+  const totalMinutes = parseTimeToMinutes_(time);
+  if (!dayNum || totalMinutes == null) throw new Error('Invalid day/time rule in Config.');
+  return { dayNum, totalMinutes };
+}
+
+function buildRuleLabel_(day, time) {
+  const safeDay = String(day || '').trim();
+  const safeTime = String(time || '').trim();
+  return safeDay && safeTime ? `${safeDay} ${safeTime}` : 'Not set';
+}
+
+function computeUpcomingOrCurrentIso_(now, timezone, dayNum, totalMinutes, forwardOnly) {
+  const currentDayNum = Number(Utilities.formatDate(now, timezone, 'u'));
+  let offsetDays = dayNum - currentDayNum;
+
+  if (forwardOnly && offsetDays < 0) offsetDays += 7;
+  if (!forwardOnly && offsetDays > 0) offsetDays -= 7;
+
+  const baseYear = Number(Utilities.formatDate(now, timezone, 'yyyy'));
+  const baseMonth = Number(Utilities.formatDate(now, timezone, 'M')) - 1;
+  const baseDay = Number(Utilities.formatDate(now, timezone, 'd'));
+  const midnight = new Date(baseYear, baseMonth, baseDay, 0, 0, 0, 0);
+  const target = new Date(midnight.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+
+  target.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  return target.toISOString();
+}
+
+function computeNextOccurrenceIso_(now, timezone, dayNum, totalMinutes) {
+  let iso = computeUpcomingOrCurrentIso_(now, timezone, dayNum, totalMinutes, true);
+  const target = new Date(iso);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 7);
+    return target.toISOString();
+  }
+  return iso;
+}
+
+/* =========================
+   SMALL HELPERS
+========================= */
+
+function getSubmissionCountForWeek_(week) {
+  const rows = dedupeLatestPicks_(readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PICKS)), buildCanonicalNameMap_(readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))));
+  return rows.filter(r => Number(r.Week || 0) === Number(week || 0)).length;
+}
+
+function getScoresSummary_() {
+  const rows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.SCORES));
+  if (!rows.length) return { week: null, count: 0 };
+
+  let latestWeek = 0;
+  rows.forEach(r => latestWeek = Math.max(latestWeek, Number(r.Week || 0)));
+  return {
+    week: latestWeek || null,
+    count: rows.filter(r => Number(r.Week || 0) === latestWeek).length
+  };
+}
+
+function buildEliteHeaders_(rows) {
+  const sample = rows[0] || {};
+  return {
+    q1: String(sample.Q1_Label || 'Q1'),
+    q2: String(sample.Q2_Label || 'Q2'),
+    q3: String(sample.Q3_Label || 'Q3'),
+    q4: String(sample.Q4_Label || 'Q4'),
+    q5: String(sample.Q5_Label || 'Q5'),
+    q6: String(sample.Q6_Label || 'Q6'),
+    bonus: String(sample.Bonus_Label || 'Bonus'),
+    comment: String(sample.Comment_Label || 'Comment')
+  };
+}
+
+function buildCorrectMap_(scoringRow) {
+  if (!scoringRow) return {};
+  return {
+    q1: normalizeCorrectList_(scoringRow.Q1_Correct),
+    q2: normalizeCorrectList_(scoringRow.Q2_Correct),
+    q3: normalizeCorrectList_(scoringRow.Q3_Correct),
+    q4: normalizeCorrectList_(scoringRow.Q4_Correct),
+    q5: normalizeCorrectList_(scoringRow.Q5_Correct),
+    q6: normalizeCorrectList_(scoringRow.Q6_Correct),
+    bonus: normalizeCorrectList_(scoringRow.Bonus_Correct)
+  };
+}
+
+function buildEliteQuestionColumns_(rows, headers, correct) {
+  const defs = [
+    { key: 'q1', labelCol: 'Q1_Label', pickCol: 'Q1_Pick' },
+    { key: 'q2', labelCol: 'Q2_Label', pickCol: 'Q2_Pick' },
+    { key: 'q3', labelCol: 'Q3_Label', pickCol: 'Q3_Pick' },
+    { key: 'q4', labelCol: 'Q4_Label', pickCol: 'Q4_Pick' },
+    { key: 'q5', labelCol: 'Q5_Label', pickCol: 'Q5_Pick' },
+    { key: 'q6', labelCol: 'Q6_Label', pickCol: 'Q6_Pick' },
+    { key: 'bonus', labelCol: 'Bonus_Label', pickCol: 'Bonus_Pick' }
+  ];
+
+  return defs
+    .map(def => ({
+      key: def.key,
+      label: String(((rows || []).find(row => String(row[def.labelCol] || '').trim()) || {})[def.labelCol] || '').trim(),
+      pickCol: def.pickCol,
+      correct: (correct && correct[def.key]) || []
+    }))
+    .filter(col => {
+      if (!col.label) return false;
+      return (rows || []).some(row => String(row[col.pickCol] || '').trim());
+    });
+}
+
+function normalizeCorrectList_(value) {
+  return String(value || '')
+    .split('|')
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+}
+
+function hasAssignedPointValue_(value) {
+  return String(value ?? '').trim() !== '';
+}
+
+function stripHtmlForValidation_(html) {
+  return String(html || '').replace(/<[^>]*>/g, '').trim() || 'this question';
+}
+
+function getCampRulesTitle_(config) {
+  const title = sanitizeHtml_(String((config && config.AtAGlanceTitle) || '').trim());
+  const plain = String(title || '').replace(/<[^>]*>/g, '').trim().toLowerCase();
+  return !plain || plain === 'at a glance' ? 'Camp Rules' : title;
+}
+
+function uniqueBy51_(items, keyFn) {
+  const seen = new Set();
+  return (items || []).filter(item => {
+    const key = String(keyFn(item) || '').trim();
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizePhotoKey51_(photo) {
+  return [
+    normalizeTextKey51_(photo && photo.photoUrl),
+    normalizeTextKey51_(photo && photo.caption),
+    normalizeTextKey51_(photo && photo.name)
+  ].join('|');
+}
+
+function normalizeTextKey51_(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isEpisodeContentPublishedForWeek_(week, config, timezone) {
+  const targetWeek = Number(week || 0);
+  const currentWeek = Number(config.WeekNumber || 1);
+  if (!targetWeek) return false;
+  if (targetWeek < currentWeek) return true;
+  if (targetWeek > currentWeek) return false;
+
+  const now = new Date();
+  const rule = parseRule_(config.EpisodeDay, config.EpisodeTime);
+  const nowDay = Number(Utilities.formatDate(now, timezone || 'America/Los_Angeles', 'u'));
+  const nowMinutes =
+    Number(Utilities.formatDate(now, timezone || 'America/Los_Angeles', 'H')) * 60 +
+    Number(Utilities.formatDate(now, timezone || 'America/Los_Angeles', 'm'));
+
+  return nowDay > rule.dayNum || (nowDay === rule.dayNum && nowMinutes >= rule.totalMinutes);
+}
+
+function sanitizeHtml_(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '');
+}

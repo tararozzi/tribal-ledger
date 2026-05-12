@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    <?!= include('Styles'); ?>
+  </style>
+</head>
+<body>
+  <div class="embers" aria-hidden="true">
+    <span class="ember" style="--x:-420px;--drift:120px;--h:820px;--dur:7.6s;--s:.9;animation-delay:-.8s"></span>
+    <span class="ember" style="--x:-260px;--drift:160px;--h:920px;--dur:8.2s;--s:.7;animation-delay:-3.2s"></span>
+    <span class="ember" style="--x:-120px;--drift:110px;--h:760px;--dur:6.8s;--s:.6;animation-delay:-1.5s"></span>
+    <span class="ember" style="--x:-20px;--drift:140px;--h:980px;--dur:9.4s;--s:.8;animation-delay:-5.6s"></span>
+    <span class="ember" style="--x:140px;--drift:130px;--h:860px;--dur:7.9s;--s:.65;animation-delay:-2.7s"></span>
+    <span class="ember" style="--x:260px;--drift:170px;--h:1040px;--dur:10.2s;--s:.9;animation-delay:-6.1s"></span>
+    <span class="ember" style="--x:420px;--drift:115px;--h:780px;--dur:7.1s;--s:.75;animation-delay:-4.3s"></span>
+  </div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-title" id="brandTitle">The Tribal Ledger</div>
+          <div class="brand-subtitle" id="brandSubtitle">Outwit &bull; Outplay &bull; Outlast &bull; Outscore</div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-btn active" data-section="home">Back to Camp</button>
+          <button class="nav-btn" data-section="recap">Weekly Recap</button>
+          <button class="nav-btn" data-section="seasonTable">Season Ledger</button>
+          <button class="nav-btn" data-section="bonusLog">Other Points</button>
+          <button class="nav-btn" data-section="admin">Admin</button>
+
+          <!-- =========================
+            ADDITIONAL BUTTONS SAVED:
+            button class="nav-btn" data-section="mygame">My Picks</button
+	    button class="nav-btn" data-section="leaderboard">Leaderboard</button
+            button class="nav-btn" data-section="picks">Voting</button
+            button class="nav-btn" data-section="campPicks">Weekly Camp Picks</button
+          ========================= -->
+
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+
+        <div class="hero-center-logo">
+          <img 
+            src="https://lh3.googleusercontent.com/d/18GOagtLjKwf6xRtgIrqfT4j7BJoSNUPg" 
+            alt="Fantasy Survivor 51 Logo">
+        </div>
+
+        <div class="hero-top">
+          <div>
+            <h1 id="heroTitle">Welcome back to camp.</h1>
+            <p id="heroSubtitle">Cast your vote, track the leaderboard, and follow the fallout from tribal council.</p>
+          </div>
+
+          <div class="countdowns">
+            <div class="countdown-box">
+              <div class="countdown-label">Voting closes</div>
+              <div class="countdown-time" id="weekDisplay">Week --</div>
+              <div class="countdown-subtext" id="deadlineText">Loading…</div>
+              <div class="countdown-live" id="deadlineLive">--</div>
+            </div>
+
+            <div class="countdown-box">
+              <div class="countdown-label">Next episode airs</div>
+              <div class="countdown-time" id="episodeLabel">Wednesday 8:00 PM</div>
+              <div class="countdown-live" id="episodeLive">--</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <button id="voteBtn" class="btn vote-btn closed" onclick="showSection('picks')">
+            Cast Your Vote
+          </button>
+          <button class="btn btn-secondary" onclick="showSection('leaderboard')">View Leaderboard</button>
+          <button class="btn btn-secondary" onclick="showSection('campPicks')">View Camp Picks</button>
+        </div>
+      </section>
+
+      <section id="home" class="section active">
+        <div class="dashboard-grid">
+          <div class="card stat-card">
+            <div class="stat-label">Current Week</div>
+            <div class="stat-value" id="homeWeek">--</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Season</div>
+            <div class="stat-value smaller" id="homeSeason">--</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Voting Status</div>
+            <div class="stat-value smaller" id="homeVotingStatus">--</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-label">Saved Name</div>
+            <div class="stat-value smaller" id="savedNameDisplay">None</div>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="card">
+            <h2 class="section-title" id="campAnnouncementsTitle">Camp Announcements</h2>
+            <div id="campAnnouncementsList"></div>
+          </div>
+
+          <div class="card">
+            <h2 class="section-title" id="atAGlanceTitle">Camp Rules</h2>
+            <ul class="bullet-list" id="atAGlanceList"></ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Cast Status</h2>
+          <div id="castGrid" class="cast-grid"></div>
+        </div>
+      </section>
+
+      <section id="picks" class="section">
+        <div class="card">
+          <h2 class="section-title">Survivor Voting Board</h2>
+
+          <form id="picksForm">
+            <div class="question-block">
+              <div class="question-title">Player Name</div>
+              <input id="playerName" class="text-input" placeholder="Enter your name exactly as listed">
+            </div>
+
+            <div class="question-block">
+              <div class="question-title">Email</div>
+              <input id="playerEmail" class="text-input" placeholder="Optional but recommended">
+            </div>
+
+            <div id="dynamicQuestions"></div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit" id="submitBtn">Submit Parchment</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="mygame" class="section">
+        <div class="card">
+          <h2 class="section-title">My Game</h2>
+          <div class="admin-row">
+            <div>
+              <label class="admin-label" for="myGameName">Your Name</label>
+              <input id="myGameName" class="text-input" placeholder="Enter your name">
+            </div>
+            <div>
+              <label class="admin-label" for="myGameWeek">Week</label>
+              <input id="myGameWeek" class="text-input" type="number" min="1" value="1">
+            </div>
+            <div class="align-end">
+              <button class="btn btn-primary" type="button" onclick="loadMySubmission()">Load My Picks</button>
+            </div>
+          </div>
+          <div id="myGameStatus" class="mygame-status"></div>
+        </div>
+      </section>
+
+      <section id="campPicks" class="section">
+        <div class="card">
+          <div class="picksview-topbar">
+            <div>
+              <h2 class="section-title">Camp Picks</h2>
+              <p class="subtle">Public after the Wednesday 8:00 PM episode update.</p>
+            </div>
+            <div class="picksview-controls">
+              <label class="admin-label" for="picksWeekSelect">Week</label>
+              <select id="picksWeekSelect" class="text-input picks-week-select"></select>
+              <button class="btn btn-secondary" type="button" onclick="loadEliteWeekPicks()">Load Week</button>
+            </div>
+          </div>
+          <div id="picksViewContainer" class="picksview-container">Loading picks…</div>
+        </div>
+      </section>
+
+      <section id="leaderboard" class="section">
+        <div class="card">
+          <h2 class="section-title">Leaderboard</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Week Points</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboardBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="seasonTable" class="section">
+        <div class="card">
+          <h2 class="section-title">Season Ledger: Responses + Points</h2>
+          <div id="seasonTableContainer" class="table-wrap">Loading season ledger…</div>
+        </div>
+      </section>
+
+      <section id="bonusLog" class="section">
+        <div class="card">
+          <h2 class="section-title">Camp Fire Bonus Points</h2>
+          <div id="bonusLogContainer" class="table-wrap">Loading bonus log…</div>
+        </div>
+      </section>
+
+      <section id="recap" class="section">
+        <div class="card album-card">
+          <div class="album-topbar">
+            <div>
+              <h2 id="recapTitle" class="section-title album-title">Weekly Recap</h2>
+              <p class="subtle">Weekly updates with each episode's campfire memories.</p>
+            </div>
+            <div id="recapWeekTabs" class="album-tabs" aria-label="Weekly update weeks"></div>
+          </div>
+          <div id="recapBody" class="recap-updates"></div>
+        </div>
+      </section>
+
+      <section id="admin" class="section">
+        <div class="card">
+          <h2 class="section-title">Admin Tribe Council</h2>
+
+          <div class="admin-row">
+            <div>
+              <label class="admin-label" for="adminPasscode">Admin Passcode</label>
+              <input type="password" id="adminPasscode" class="text-input" placeholder="Enter passcode">
+            </div>
+            <div class="align-end">
+              <button class="btn btn-primary" type="button" onclick="unlockAdmin()">Unlock Council</button>
+            </div>
+          </div>
+
+            <!-- =========================
+            ADMIN PANEL
+            ========================= -->
+          <div id="adminPanel" class="hidden">
+
+            <!-- Voting Controls -->
+            <div class="card inner-card">
+              <h3 class="section-title mini">Voting Controls</h3>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSetVoting(true)">Open Voting</button>
+                <button class="btn btn-danger" type="button" onclick="adminSetVoting(false)">Close Voting</button>
+                <button class="btn btn-secondary" type="button" onclick="loadAdminDashboard()">Refresh Council Status</button>
+              </div>
+              <div id="adminStatusBox" class="admin-status-box"></div>
+            </div>
+
+            <!-- Weekly Results + Scoring -->
+            <div class="card inner-card">
+              <h3 class="section-title mini">Voting Questions + Camp Home Content</h3>
+
+              <div class="admin-grid compact-admin-grid">
+                <div>
+                  <label class="admin-label" for="adminQuestionWeek">Week Number</label>
+                  <input id="adminQuestionWeek" class="text-input" type="number" min="1" placeholder="Week #">
+                </div>
+                <div class="admin-action-cell">
+                  <button class="btn btn-secondary" type="button" onclick="adminLoadQuestionWeek()">Load Week Questions</button>
+                </div>
+                <div class="admin-action-cell">
+                  <button class="btn btn-secondary" type="button" onclick="adminUseCurrentQuestionWeek()">Current Week</button>
+                </div>
+              </div>
+              <div id="adminQuestionWeekStatus" class="tiny-note"></div>
+
+              <div class="admin-grid">
+                <div>
+                  <label class="admin-label" for="adminQ1">Q1</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ1', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ1', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ1', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ1')">Link</button>
+                  </div>
+                  <div id="adminQ1" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ1Type">Q1 Options Source</label>
+                  <select id="adminQ1Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ1Options">Q1 Manual Options</label>
+                  <textarea id="adminQ1Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminQ2">Q2</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ2', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ2', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ2', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ2')">Link</button>
+                  </div>
+                  <div id="adminQ2" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ2Type">Q2 Options Source</label>
+                  <select id="adminQ2Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ2Options">Q2 Manual Options</label>
+                  <textarea id="adminQ2Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminQ3">Q3</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ3', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ3', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ3', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ3')">Link</button>
+                  </div>
+                  <div id="adminQ3" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ3Type">Q3 Options Source</label>
+                  <select id="adminQ3Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ3Options">Q3 Manual Options</label>
+                  <textarea id="adminQ3Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminQ4">Q4</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ4', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ4', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ4', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ4')">Link</button>
+                  </div>
+                  <div id="adminQ4" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ4Type">Q4 Options Source</label>
+                  <select id="adminQ4Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ4Options">Q4 Manual Options</label>
+                  <textarea id="adminQ4Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminQ5">Q5</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ5', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ5', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ5', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ5')">Link</button>
+                  </div>
+                  <div id="adminQ5" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ5Type">Q5 Options Source</label>
+                  <select id="adminQ5Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ5Options">Q5 Manual Options</label>
+                  <textarea id="adminQ5Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminQ6">Q6</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ6', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ6', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminQ6', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminQ6')">Link</button>
+                  </div>
+                  <div id="adminQ6" class="rich-editor compact" contenteditable="true"></div>
+                  <label class="admin-label" for="adminQ6Type">Q6 Options Source</label>
+                  <select id="adminQ6Type" class="text-input">
+                    <option value="cast">Cast</option>
+                    <option value="teams">Teams</option>
+                    <option value="custom">Manual Options</option>
+                  </select>
+                  <label class="admin-label" for="adminQ6Options">Q6 Manual Options</label>
+                  <textarea id="adminQ6Options" class="text-area compact" placeholder="Separate manual options with commas"></textarea>
+                </div>
+              </div>
+
+              <div class="question-block">
+                <label class="admin-label" for="adminCommentPromptTemplate">Free-Text Question</label>
+                <input id="adminCommentPromptTemplate" class="text-input" placeholder="Campfire Thoughts">
+              </div>
+
+              <div class="admin-two-col">
+                <div>
+                  <label class="admin-label" for="adminCampAnnouncementsTitle">Camp Announcements Title</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncementsTitle', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncementsTitle', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncementsTitle', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminCampAnnouncementsTitle')">Link</button>
+                  </div>
+                  <div id="adminCampAnnouncementsTitle" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminCampAnnouncement1">Camp Announcement 1</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement1', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement1', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement1', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminCampAnnouncement1')">Link</button>
+                  </div>
+                  <div id="adminCampAnnouncement1" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminCampAnnouncement2">Camp Announcement 2</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement2', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement2', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement2', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminCampAnnouncement2')">Link</button>
+                  </div>
+                  <div id="adminCampAnnouncement2" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminCampAnnouncement3">Camp Announcement 3</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement3', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement3', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminCampAnnouncement3', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminCampAnnouncement3')">Link</button>
+                  </div>
+                  <div id="adminCampAnnouncement3" class="rich-editor compact" contenteditable="true"></div>
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminAtAGlanceTitle">Camp Rules Title</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlanceTitle', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlanceTitle', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlanceTitle', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlanceTitle')">Link</button>
+                  </div>
+                  <div id="adminAtAGlanceTitle" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance1">Camp Rules Item 1</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance1', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance1', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance1', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance1')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance1" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance2">Camp Rules Item 2</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance2', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance2', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance2', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance2')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance2" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance3">Camp Rules Item 3</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance3', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance3', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance3', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance3')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance3" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance4">Camp Rules Item 4</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance4', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance4', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance4', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance4')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance4" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance5">Camp Rules Item 5</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance5', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance5', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance5', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance5')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance5" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance6">Camp Rules Item 6</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance6', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance6', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance6', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance6')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance6" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance7">Camp Rules Item 7</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance7', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance7', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance7', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance7')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance7" class="rich-editor compact" contenteditable="true"></div>
+
+                  <label class="admin-label" for="adminAtAGlance8">Camp Rules Item 8</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance8', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance8', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance8', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance8')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance8" class="rich-editor compact" contenteditable="true"></div>
+                  
+                  <label class="admin-label" for="adminAtAGlance9">Camp Rules Item 9</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance9', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance9', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance9', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance9')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance9" class="rich-editor compact" contenteditable="true"></div>
+                  
+                  <label class="admin-label" for="adminAtAGlance10">Camp Rules Item 10</label>
+                  <div class="toolbar">
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance10', 'bold')"><b>B</b></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance10', 'underline')"><u>U</u></button>
+                    <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminAtAGlance10', 'insertUnorderedList')">&bull; List</button>
+                    <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminAtAGlance10')">Link</button>
+                  </div>
+                  <div id="adminAtAGlance10" class="rich-editor compact" contenteditable="true"></div>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks()">Save Questions + Camp Content</button>
+              </div>
+            </div>
+
+            <!-- Weekly Results + Scoring -->
+            <div class="card inner-card">
+              <h3 class="section-title mini">Weekly Results + Scoring</h3>
+
+              <div class="admin-grid">
+                <div>
+                  <label class="admin-label" for="adminResultsWeek">Week Number</label>
+                  <input id="adminResultsWeek" class="text-input" type="number" min="1" placeholder="Week #">
+                </div>
+              </div>
+
+              <div class="admin-grid">
+                <div>
+                  <label class="admin-label" for="adminResultQ1">Q1 Correct Answer</label>
+                  <input id="adminResultQ1" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ1Points">Q1 Points</label>
+                  <input id="adminResultQ1Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultQ2">Q2 Correct Answer</label>
+                  <input id="adminResultQ2" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ2Points">Q2 Points</label>
+                  <input id="adminResultQ2Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultQ3">Q3 Correct Answer</label>
+                  <input id="adminResultQ3" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ3Points">Q3 Points</label>
+                  <input id="adminResultQ3Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultQ4">Q4 Correct Answer</label>
+                  <input id="adminResultQ4" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ4Points">Q4 Points</label>
+                  <input id="adminResultQ4Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultQ5">Q5 Correct Answer</label>
+                  <input id="adminResultQ5" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ5Points">Q5 Points</label>
+                  <input id="adminResultQ5Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultQ6">Q6 Correct Answer</label>
+                  <input id="adminResultQ6" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultQ6Points">Q6 Points</label>
+                  <input id="adminResultQ6Points" class="text-input" type="number" value="5">
+                </div>
+
+                <div>
+                  <label class="admin-label" for="adminResultBonus">Bonus Correct Answer</label>
+                  <input id="adminResultBonus" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminResultBonusPoints">Bonus Points</label>
+                  <input id="adminResultBonusPoints" class="text-input" type="number" value="2">
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSaveResults()">Save Weekly Results</button>
+                <button class="btn btn-secondary" type="button" onclick="adminRecalculateScores()">Recalculate Scores</button>
+                <button class="btn btn-secondary" type="button" onclick="adminAdvanceWeek()">Advance to Next Week</button>
+              </div>
+            </div>
+
+            <!-- Camp Fire Bonus Points -->
+            <div class="card inner-card">
+              <h3 class="section-title mini">Camp Fire Bonus Points</h3>
+
+              <div class="admin-grid">
+                <div>
+                  <label class="admin-label" for="adminBonusWeek">Week Number</label>
+                  <input id="adminBonusWeek" class="text-input" type="number" min="1">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminBonusPlayer">Player</label>
+                  <input id="adminBonusPlayer" class="text-input">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminBonusPoints">Points Awarded</label>
+                  <input id="adminBonusPoints" class="text-input" type="number">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminBonusReason">Reason Shown on Site</label>
+                  <input id="adminBonusReason" class="text-input">
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminAddBonus()">Save Bonus</button>
+              </div>
+            </div>
+
+            <!-- Weekly Recap -->
+            <div class="card inner-card">
+              <h3 class="section-title mini">Weekly Recap Editor</h3>
+
+              <div class="admin-row">
+                <div>
+                  <label class="admin-label" for="adminRecapWeek">Week Number</label>
+                  <input id="adminRecapWeek" class="text-input" type="number" min="1">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminRecapTitle">Recap Title</label>
+                  <input id="adminRecapTitle" class="text-input" placeholder="Appears as the recap headline">
+                </div>
+              </div>
+
+              <div class="toolbar">
+                <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminRecapBody', 'bold')"><b>B</b></button>
+                <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminRecapBody', 'underline')"><u>U</u></button>
+                <button class="toolbar-btn" type="button" onmousedown="formatEditor(event, 'adminRecapBody', 'insertUnorderedList')">&bull; List</button>
+                <button class="toolbar-btn" type="button" onmousedown="insertEditorLink(event, 'adminRecapBody')">Link</button>
+              </div>
+
+              <label class="admin-label" for="adminRecapBody">Weekly Recap Content (shown on the live site)</label>
+              <div id="adminRecapBody" class="rich-editor" contenteditable="true"></div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSaveRecap()">Save Recap</button>
+              </div>
+
+              <div class="recap-photo-manager">
+                <h3 class="section-title mini">Campfire Memories Photos</h3>
+                <p class="subtle">Upload photos for the same week as this recap.</p>
+
+                <div class="admin-row">
+                  <div>
+                    <label class="admin-label" for="photoName">Uploaded By</label>
+                    <input id="photoName" class="text-input" value="Admin">
+                  </div>
+                  <div>
+                    <label class="admin-label" for="photoEmail">Email</label>
+                    <input id="photoEmail" class="text-input" placeholder="Optional">
+                  </div>
+                </div>
+
+                <div class="question-block">
+                  <div class="question-title">Snapshot Caption</div>
+                  <input id="photoCaption" class="text-input" placeholder="Add a caption for camp">
+                </div>
+
+                <div id="dropZone" class="drop-zone">
+                  <input id="photoInput" type="file" accept="image/*" hidden>
+                  <div class="drop-zone-inner">
+                    <div class="drop-zone-title">Drop weekly recap photo here</div>
+                    <div class="drop-zone-subtitle">or click to browse</div>
+                  </div>
+                </div>
+
+                <div id="photoPreviewWrap" class="photo-preview-wrap hidden">
+                  <img id="photoPreview" class="photo-preview" alt="Preview">
+                </div>
+
+                <div class="form-actions">
+                  <button class="btn btn-primary" type="button" onclick="uploadPhoto()">Upload Photo to This Week</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="parchmentModal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeModal()"></div>
+    <div class="modal-card parchment">
+      <div class="modal-title" id="modalTitle">The Tribe Has Spoken</div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="form-actions center">
+        <button class="btn btn-primary" type="button" onclick="closeModal()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let APP_DATA = null;
+let ADMIN_PASSCODE = '';
+let PHOTO_DATA_URL = '';
+let PHOTO_FILE_NAME = '';
+let PHOTO_MIME_TYPE = '';
+let SELECTED_RECAP_WEEK = null;
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => showSection(btn.dataset.section));
+});
+
+window.onload = () => {
+  document.getElementById('picksForm').addEventListener('submit', handleSubmit);
+  initDropZone();
+  loadAppData();
+};
+
+function showSection(sectionId) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  const section = document.getElementById(sectionId);
+  if (section) section.classList.add('active');
+
+  const btn = document.querySelector(`[data-section="${sectionId}"]`);
+  if (btn) btn.classList.add('active');
+
+  if (sectionId === 'campPicks') {
+    loadPickWeeks();
+    loadEliteWeekPicks();
+  }
+  if (sectionId === 'leaderboard' && !APP_DATA) loadAppData();
+  if (sectionId === 'seasonTable') loadSeasonResponsesTable();
+  if (sectionId === 'bonusLog') loadBonusLog();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function loadAppData() {
+  google.script.run
+    .withSuccessHandler(data => {
+      APP_DATA = data;
+      renderApp(data);
+      loadSeasonResponsesTable();
+      loadBonusLog();
+    })
+    .withFailureHandler(err => showModal('Camp Error', getErrorMessage(err)))
+    .getAppData();
+}
+
+function renderApp(data) {
+  document.getElementById('brandTitle').textContent = `🏝️ ${data.ledgerTitle || 'The Tribal Ledger'}`;
+  document.getElementById('brandSubtitle').textContent = data.ledgerSubtitle || '';
+  document.getElementById('homeWeek').textContent = data.weekNumber;
+  document.getElementById('homeSeason').textContent = data.seasonName;
+  document.getElementById('homeVotingStatus').textContent = data.voting.statusText;
+
+  const voteBtn = document.getElementById('voteBtn');
+
+  if (voteBtn) {
+    const isOpen = data.voting && data.voting.isOpen;
+
+    voteBtn.classList.toggle('open', isOpen);
+    voteBtn.classList.toggle('closed', !isOpen);
+
+    voteBtn.textContent = isOpen ? 'Cast Your Vote' : 'Voting Closed';
+  }
+
+  document.getElementById('heroTitle').textContent = `Week ${data.weekNumber}: Welcome back to camp.`;
+  document.getElementById('heroSubtitle').textContent = `Voting ${data.voting.statusText.toLowerCase()}. Public picks reveal ${data.reveal.revealLabel}.`;
+  document.getElementById('weekDisplay').textContent = `Week ${data.weekNumber}`;
+  document.getElementById('deadlineText').textContent = data.voting.deadlineLabel || 'Deadline not set';
+  document.getElementById('episodeLabel').textContent = data.episode.label || 'Wednesday 8:00 PM';
+
+  document.getElementById('campAnnouncementsTitle').innerHTML = data.contentBlocks.campAnnouncementsTitle || 'Camp Announcements';
+  document.getElementById('atAGlanceTitle').innerHTML = normalizeCampRulesTitle_(data.contentBlocks.atAGlanceTitle);
+
+  renderContentBlocks(data.contentBlocks || {});
+  renderQuestions(data.questions || []);
+  renderLeaderboard(data.leaderboard || { rows: [] });
+  renderRecap(data.weeklyUpdates || []);
+  renderCastGrid(data.castGrid || []);
+  renderHomePhotos();
+  startCountdown('deadlineLive', data.voting.deadlineIso, 'Voting closed');
+  startCountdown('episodeLive', data.episode.nextEpisodeIso, 'Now airing');
+
+  const savedName = localStorage.getItem('survivor51_name') || '';
+  const savedEmail = localStorage.getItem('survivor51_email') || '';
+  if (savedName) {
+    document.getElementById('savedNameDisplay').textContent = savedName;
+    document.getElementById('playerName').value = savedName;
+    document.getElementById('myGameName').value = savedName;
+    document.getElementById('photoName').value = savedName;
+  }
+  if (savedEmail) {
+    document.getElementById('playerEmail').value = savedEmail;
+    document.getElementById('photoEmail').value = savedEmail;
+  }
+  document.getElementById('myGameWeek').value = data.weekNumber;
+}
+
+function renderContentBlocks(blocks) {
+  const camp = document.getElementById('campAnnouncementsList');
+  camp.innerHTML = '';
+  uniqueBy_((blocks.campAnnouncements || []), text => stripHtml(text).toLowerCase()).forEach(text => {
+    const div = document.createElement('div');
+    div.className = 'announcement';
+    div.innerHTML = text;
+    camp.appendChild(div);
+  });
+
+  const glance = document.getElementById('atAGlanceList');
+  glance.innerHTML = '';
+  uniqueBy_((blocks.atAGlance || []), text => stripHtml(text).toLowerCase()).forEach(text => {
+    const li = document.createElement('li');
+    li.innerHTML = text;
+    glance.appendChild(li);
+  });
+}
+
+function renderQuestions(questions) {
+  const container = document.getElementById('dynamicQuestions');
+  container.innerHTML = '';
+
+  (questions || []).forEach(q => {
+    const block = document.createElement('div');
+    block.className = 'question-block';
+
+    const title = document.createElement('div');
+    title.className = 'question-title';
+    title.innerHTML = q.required ? `${q.prompt} *` : q.prompt;
+    block.appendChild(title);
+
+    if (q.type === 'text') {
+      const textarea = document.createElement('textarea');
+      textarea.id = `${q.key}Text`;
+      textarea.className = 'text-area';
+      textarea.placeholder = 'Share your campfire thoughts';
+      textarea.required = !!q.required;
+      block.appendChild(textarea);
+      container.appendChild(block);
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'option-grid';
+
+    (q.options || []).forEach(opt => {
+      const label = document.createElement('label');
+      label.className = 'option-card';
+
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = q.key;
+      input.value = opt.value;
+      input.required = !!q.required;
+
+      const media = document.createElement('div');
+      media.className = 'option-media';
+      if (opt.photoUrl) {
+        media.innerHTML = `<img src="${escapeAttr(opt.photoUrl)}" alt="${escapeAttr(opt.label)}">`;
+      } else {
+        media.innerHTML = `<div class="option-fallback">🏝️</div>`;
+      }
+
+      const text = document.createElement('div');
+      text.className = 'option-text';
+      text.innerHTML = `
+        <div class="option-name">${escapeHtml(opt.label || opt.value)}</div>
+        ${opt.team ? `<div class="option-meta">${escapeHtml(opt.team)}</div>` : ''}
+      `;
+
+      label.appendChild(input);
+      label.appendChild(media);
+      label.appendChild(text);
+      list.appendChild(label);
+    });
+
+    block.appendChild(list);
+    container.appendChild(block);
+  });
+}
+
+function renderLeaderboard(data) {
+  const body = document.getElementById('leaderboardBody');
+  body.innerHTML = '';
+
+  if (!(data.rows || []).length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4">Leaderboard will appear once players or scores are available.</td>';
+    body.appendChild(tr);
+    return;
+  }
+
+  (data.rows || []).forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(String(row.rank || ''))}</td>
+      <td><strong>${escapeHtml(row.name || '')}</strong></td>
+      <td>${escapeHtml(String(row.weekPoints ?? ''))}</td>
+      <td>${escapeHtml(String(row.total ?? ''))}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderRecap(updates) {
+  const tabs = document.getElementById('recapWeekTabs');
+  const wrap = document.getElementById('recapBody');
+  if (!tabs || !wrap) return;
+
+  updates = updates || [];
+  tabs.innerHTML = '';
+  wrap.innerHTML = '';
+
+  if (!updates.length) {
+    document.getElementById('recapTitle').textContent = 'Weekly Recap';
+    wrap.innerHTML = '<div class="announcement">Weekly recap coming soon.</div>';
+    return;
+  }
+
+  if (!SELECTED_RECAP_WEEK || !updates.some(update => Number(update.week) === Number(SELECTED_RECAP_WEEK))) {
+    SELECTED_RECAP_WEEK = updates[0].week;
+  }
+
+  updates.forEach(update => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `album-tab ${Number(update.week) === Number(SELECTED_RECAP_WEEK) ? 'active' : ''}`;
+    btn.textContent = `Week ${update.week}`;
+    btn.onclick = () => {
+      SELECTED_RECAP_WEEK = update.week;
+      renderRecap(updates);
+    };
+    tabs.appendChild(btn);
+  });
+
+  updates.forEach(update => {
+    const active = Number(update.week) === Number(SELECTED_RECAP_WEEK);
+    const section = document.createElement('section');
+    section.className = `recap-update album-week ${active ? 'active' : ''}`;
+    section.innerHTML = `
+      <h3 class="section-title mini">${escapeHtml(update.title || `Week ${update.week} Recap`)}</h3>
+      <div class="recap-box">${update.body || '<p>Weekly recap coming soon.</p>'}</div>
+      <div class="recap-photos">
+        <div class="album-week-heading">
+          <h3 class="section-title mini">Captured Moments📸</h3>
+          <span class="album-count">${escapeHtml(String((update.photos || []).length))} photos</span>
+        </div>
+        <div class="photo-grid"></div>
+      </div>
+    `;
+
+    const grid = section.querySelector('.photo-grid');
+    if ((update.photos || []).length) {
+      (update.photos || []).forEach(photo => grid.appendChild(createPhotoCard_(photo)));
+    } else {
+      grid.innerHTML = '<div class="announcement">No photos published for this week yet.</div>';
+    }
+    wrap.appendChild(section);
+  });
+}
+
+function renderCastGrid(castRows) {
+  const wrap = document.getElementById('castGrid');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  if (!castRows.length) {
+    wrap.innerHTML = '<div class="announcement">Cast photos will appear here once the CastStatus sheet is filled in.</div>';
+    return;
+  }
+
+  uniqueBy_(castRows, player => normalizeTextKey_(player.name)).forEach(player => {
+    const status = normalizeCastStatus(player.status);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `cast-card ${status}`;
+    card.onclick = () => showCastCard(player);
+    card.innerHTML = `
+      <div class="cast-photo-wrap">
+        ${player.photoUrl
+          ? `<img src="${escapeAttr(player.photoUrl)}" alt="${escapeAttr(player.name)}">`
+          : '<div class="cast-photo-fallback">No Photo</div>'}
+        <span class="cast-status">${escapeHtml(player.statusLabel || status.toUpperCase())}</span>
+      </div>
+      <div class="cast-name">${escapeHtml(player.name || '')}</div>
+      ${player.team ? `<div class="cast-team">${escapeHtml(player.team)}</div>` : ''}
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+function showCastCard(player) {
+  const status = player.statusLabel || normalizeCastStatus(player.status).toUpperCase();
+  document.getElementById('modalTitle').textContent = player.name || 'Castaway';
+  document.getElementById('modalBody').innerHTML = `
+    ${player.photoUrl ? `<img class="cast-modal-photo" src="${escapeAttr(player.photoUrl)}" alt="${escapeAttr(player.name)}">` : ''}
+    <strong>Status:</strong> ${escapeHtml(status)}<br>
+    ${player.team ? `<strong>Tribe:</strong> ${escapeHtml(player.team)}` : ''}
+  `;
+  document.getElementById('parchmentModal').classList.remove('hidden');
+}
+
+function normalizeCastStatus(status) {
+  return String(status || 'active').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'active';
+}
+
+function renderHomePhotos() {
+  const photos = (APP_DATA && APP_DATA.tribePhotos) ? APP_DATA.tribePhotos : [];
+  renderPhotosInto('homePhotos', photos);
+}
+
+function renderPhotosInto(targetId, photos) {
+  const wrap = document.getElementById(targetId);
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  if (!photos.length) {
+    wrap.innerHTML = '<div class="announcement">No tribe snapshots yet this week.</div>';
+    return;
+  }
+
+  uniqueBy_(photos, photo => normalizePhotoKey_(photo)).forEach(photo => wrap.appendChild(createPhotoCard_(photo)));
+}
+
+function createPhotoCard_(photo) {
+  const card = document.createElement('div');
+  card.className = 'photo-card';
+  card.innerHTML = `
+    <img src="${escapeAttr(photo.photoUrl)}" alt="${escapeAttr(photo.caption || photo.name || 'Campfire Memory')}">
+    <div class="photo-caption"><strong>${escapeHtml(photo.name || '')}</strong>${photo.caption ? ` — ${escapeHtml(photo.caption)}` : ''}</div>
+  `;
+  return card;
+}
+
+function uniqueBy_(items, keyFn) {
+  const seen = new Set();
+  return (items || []).filter(item => {
+    const key = String(keyFn(item) || '').trim();
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeTextKey_(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normalizeCampRulesTitle_(title) {
+  const safeTitle = String(title || '').trim();
+  const plain = stripHtml(safeTitle).trim().toLowerCase();
+  return !plain || plain === 'at a glance' ? 'Camp Rules' : safeTitle;
+}
+
+function normalizePhotoKey_(photo) {
+  return [
+    normalizeTextKey_(photo && photo.photoUrl),
+    normalizeTextKey_(photo && photo.caption),
+    normalizeTextKey_(photo && photo.name)
+  ].join('|');
+}
+
+function getSelectedValue(name) {
+  const checked = document.querySelector(`input[name="${name}"]:checked`);
+  return checked ? checked.value : '';
+}
+
+function handleSubmit(event) {
+  event.preventDefault();
+
+  if (!APP_DATA) {
+    showModal('Camp Error', 'App data is still loading.');
+    return;
+  }
+
+  const name = document.getElementById('playerName').value.trim();
+  const email = document.getElementById('playerEmail').value.trim();
+
+  if (!name) {
+    showModal('Missing Name', 'Please enter your player name.');
+    return;
+  }
+
+  const payload = {
+    week: APP_DATA.weekNumber,
+    name,
+    email
+  };
+
+  for (const q of (APP_DATA.questions || [])) {
+    const plainPrompt = stripHtml(q.prompt);
+    if (q.type === 'text') {
+      const textValue = document.getElementById(`${q.key}Text`)?.value.trim() || '';
+      if (q.required && !textValue) {
+        showModal('Incomplete Parchment', `Please answer: ${plainPrompt}`);
+        return;
+      }
+      payload[`${q.key}Label`] = plainPrompt;
+      payload[`${q.key}Text`] = textValue;
+      payload.commentLabel = plainPrompt;
+      payload.commentText = payload[`${q.key}Text`];
+    } else {
+      const val = getSelectedValue(q.key);
+      if (q.required && !val) {
+        showModal('Incomplete Parchment', `Please answer: ${plainPrompt}`);
+        return;
+      }
+      payload[`${q.key}Label`] = plainPrompt;
+      payload[`${q.key}Pick`] = val;
+    }
+  }
+
+  localStorage.setItem('survivor51_name', name);
+  localStorage.setItem('survivor51_email', email);
+
+  google.script.run
+    .withSuccessHandler(r => {
+      document.getElementById('savedNameDisplay').textContent = name;
+      showModal('Your Torch Is Lit', r.message || 'Your vote has been cast.');
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Submission Error', getErrorMessage(err)))
+    .submitPicks(payload);
+}
+
+function loadMySubmission() {
+  const name = document.getElementById('myGameName').value.trim();
+  const week = Number(document.getElementById('myGameWeek').value || 0);
+
+  if (!name || !week) {
+    showModal('Missing Info', 'Enter your name and week.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(data => {
+      const el = document.getElementById('myGameStatus');
+      if (!data) {
+        el.innerHTML = '<div class="announcement">No submission found for that week.</div>';
+        return;
+      }
+      const questionRows = (data.questions || []).map(q => `
+        <div><strong>${escapeHtml(q.label || 'Question')}:</strong> ${escapeHtml(q.pick || '—')}</div>
+      `).join('');
+
+      el.innerHTML = `
+        <div class="announcement">
+          <strong>${escapeHtml(data.name)}</strong><br>
+          ${questionRows}
+        </div>
+      `;
+    })
+    .withFailureHandler(err => showModal('Camp Error', getErrorMessage(err)))
+    .getPlayerSubmission(name, week);
+}
+
+function loadPickWeeks() {
+  google.script.run
+    .withSuccessHandler(weeks => {
+      const select = document.getElementById('picksWeekSelect');
+      select.innerHTML = '';
+      (weeks || []).forEach(week => {
+        const opt = document.createElement('option');
+        opt.value = week;
+        opt.textContent = `Week ${week}`;
+        select.appendChild(opt);
+      });
+      if (APP_DATA && APP_DATA.weekNumber && !(weeks || []).includes(APP_DATA.weekNumber)) {
+        const opt = document.createElement('option');
+        opt.value = APP_DATA.weekNumber;
+        opt.textContent = `Week ${APP_DATA.weekNumber}`;
+        select.appendChild(opt);
+      }
+    })
+    .getAvailablePickWeeks();
+}
+
+function loadEliteWeekPicks() {
+  const select = document.getElementById('picksWeekSelect');
+  const week = select && select.value ? Number(select.value) : (APP_DATA ? APP_DATA.weekNumber : 1);
+
+  const container = document.getElementById('picksViewContainer');
+  container.innerHTML = 'Loading picks...';
+
+  google.script.run
+    .withSuccessHandler(renderEliteWeekPicks)
+    .withFailureHandler(err => {
+      container.innerHTML = `<div class="announcement">Unable to load picks: ${escapeHtml(getErrorMessage(err))}</div>`;
+    })
+    .getEliteWeekPicks(week);
+}
+
+function renderEliteWeekPicks(data) {
+  const container = document.getElementById('picksViewContainer');
+  container.innerHTML = '';
+
+  if (data.hidden) {
+    container.innerHTML = '<div class="announcement">Picks will be revealed after the Wednesday 8:00 PM episode update.</div>';
+    return;
+  }
+
+  if (!data.rows || !data.rows.length) {
+    container.innerHTML = `<div class="announcement">No picks found for Week ${data.week}.</div>`;
+    return;
+  }
+
+  const columns = data.columns || [];
+
+  if (!columns.length) {
+    container.innerHTML = `<div class="announcement">No used questions found for Week ${data.week}.</div>`;
+    return;
+  }
+
+  const questionHeader = columns
+    .map(col => `<th>${escapeHtml(col.label || col.key || '')}</th>`)
+    .join('');
+
+  const table = document.createElement('table');
+  table.className = 'elite-picks-table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Player</th>
+        <th>Week Pts</th>
+        <th>Total</th>
+        ${questionHeader}
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  const tbody = table.querySelector('tbody');
+
+  data.rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(String(row.rank || ''))}</td>
+      <td><strong>${escapeHtml(row.name || '')}</strong>${row.autoAssigned ? '<div class="tiny-note">Auto-assigned</div>' : ''}</td>
+      <td>${escapeHtml(String(row.weekPoints ?? ''))}</td>
+      <td>${escapeHtml(String(row.total ?? ''))}</td>
+      ${columns.map(col => renderElitePickColumn_(row, col)).join('')}
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+
+  const thoughts = renderCampfireThoughts(data);
+  if (thoughts) container.appendChild(thoughts);
+
+  wrap.appendChild(table);
+  container.appendChild(wrap);
+}
+
+function renderElitePickColumn_(row, col) {
+  const picks = row.picks || {};
+  return `<td>${renderPickCell_(picks[col.key], col.correct)}</td>`;
+}
+
+function renderCampfireThoughts(data) {
+  const comments = (data.rows || [])
+    .map(row => ({
+      name: row.name || '',
+      text: (row.picks && row.picks.comment) ? row.picks.comment : ''
+    }))
+    .filter(row => row.text.trim());
+
+  if (!comments.length) return null;
+
+  const section = document.createElement('div');
+  section.className = 'campfire-thoughts';
+  section.innerHTML = `
+    <h3 class="section-title mini">${escapeHtml((data.headers && data.headers.comment) || 'Campfire Thoughts')}</h3>
+    <div class="campfire-thoughts-grid"></div>
+  `;
+
+  const grid = section.querySelector('.campfire-thoughts-grid');
+  comments.forEach(comment => {
+    const card = document.createElement('div');
+    card.className = 'campfire-thought-card';
+    card.innerHTML = `
+      <div class="campfire-thought-name">${escapeHtml(comment.name)}</div>
+      <div class="campfire-thought-text">${escapeHtml(comment.text)}</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  return section;
+}
+
+function renderPickCell_(value, correctList) {
+  const safeValue = escapeHtml(value || '');
+  const normalized = String(value || '').trim().toLowerCase();
+  const correct = (correctList || []).map(v => String(v || '').trim().toLowerCase());
+
+  if (!safeValue) return '<span class="pick-pill neutral">—</span>';
+  if (!correct.length) return `<span class="pick-pill neutral">${safeValue}</span>`;
+  if (correct.includes(normalized)) return `<span class="pick-pill correct">${safeValue}</span>`;
+  return `<span class="pick-pill plain">${safeValue}</span>`;
+}
+
+function loadSeasonResponsesTable() {
+  const container = document.getElementById('seasonTableContainer');
+  if (!container) return;
+
+  container.innerHTML = 'Loading season ledger...';
+
+  google.script.run
+    .withSuccessHandler(data => {
+      const columns = data.columns || [];
+      const rows = data.rows || [];
+
+      if (!columns.length || !rows.length) {
+        container.innerHTML = '<div class="announcement">No season responses yet.</div>';
+        return;
+      }
+
+      const weekCounts = {};
+      columns.forEach(col => {
+        weekCounts[col.week] = (weekCounts[col.week] || 0) + 1;
+      });
+
+      const weekHeader = Object.keys(weekCounts)
+        .map(week => `<th colspan="${weekCounts[week]}">Week ${escapeHtml(week)}</th>`)
+        .join('');
+
+      const questionHeader = columns.map(col => {
+        const pts = col.points !== '' ? ` (${escapeHtml(String(col.points))} pts)` : '';
+        return `<th>${escapeHtml(col.label)}${pts}</th>`;
+      }).join('');
+
+      let html = `
+        <div class="season-ledger-scroll">
+          <table class="elite-picks-table season-ledger-table">
+            <thead>
+              <tr>
+                <th rowspan="2" class="sticky-player">Player</th>
+                ${weekHeader}
+              </tr>
+              <tr>
+                ${questionHeader}
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      rows.forEach(row => {
+        html += `
+          <tr>
+            <td class="sticky-player"><strong>${escapeHtml(row.name || '')}</strong></td>
+            ${(row.cells || []).map(cell => `
+              <td>${cell.isCorrect
+                ? `<span class="pick-pill correct">${escapeHtml(cell.value || '—')}</span>`
+                : `<span class="pick-pill neutral">${escapeHtml(cell.value || '—')}</span>`
+              }</td>
+            `).join('')}
+          </tr>
+        `;
+      });
+
+      html += `
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    })
+    .withFailureHandler(err => {
+      container.innerHTML = `<div class="announcement">Unable to load season ledger: ${escapeHtml(getErrorMessage(err))}</div>`;
+    })
+    .getSeasonResponsesTable();
+}
+
+function loadBonusLog() {
+  const container = document.getElementById('bonusLogContainer');
+  if (!container) return;
+
+  container.innerHTML = 'Loading bonus log...';
+
+  google.script.run
+    .withSuccessHandler(rows => {
+      rows = rows || [];
+      if (!rows.length) {
+        container.innerHTML = '<div class="announcement">No bonus points logged yet.</div>';
+        return;
+      }
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Week</th>
+              <th>Player</th>
+              <th>Points</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      rows.forEach(row => {
+        html += `
+          <tr>
+            <td>${escapeHtml(String(row.week || ''))}</td>
+            <td>${escapeHtml(row.player || '')}</td>
+            <td>${escapeHtml(String(row.points || ''))}</td>
+            <td>${escapeHtml(row.reason || '')}</td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    })
+    .withFailureHandler(err => {
+      container.innerHTML = `<div class="announcement">Unable to load bonus log: ${escapeHtml(getErrorMessage(err))}</div>`;
+    })
+    .getBonusLog();
+}
+
+function unlockAdmin() {
+  const pass = document.getElementById('adminPasscode').value.trim();
+  if (!pass) {
+    showModal('Missing Passcode', 'Please enter the admin passcode.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(ok => {
+      if (!ok) {
+        showModal('Access Denied', 'Invalid admin passcode.');
+        return;
+      }
+      ADMIN_PASSCODE = pass;
+      document.getElementById('adminPanel').classList.remove('hidden');
+      loadAdminDashboard();
+      showModal('Council Opened', 'Admin Tribe Council unlocked.');
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .verifyAdminPasscode(pass);
+}
+
+function loadAdminDashboard() {
+  if (!ADMIN_PASSCODE) return;
+
+  google.script.run
+    .withSuccessHandler(data => {
+      const box = document.getElementById('adminStatusBox');
+      box.innerHTML = `
+        <strong>Current Week:</strong> ${escapeHtml(String(data.weekNumber || ''))}<br>
+        <strong>Voting Status:</strong> ${escapeHtml(data.votingStatus || '')}<br>
+        <strong>Deadline:</strong> ${escapeHtml(data.deadlineLabel || '')}<br>
+        <strong>Reveal Time:</strong> ${escapeHtml(data.revealLabel || '')}<br>
+        <strong>Submissions This Week:</strong> ${escapeHtml(String(data.submissionsCount || 0))}<br>
+        <strong>Latest Scored Week:</strong> ${escapeHtml(String((data.scoresSummary && data.scoresSummary.week) || '—'))}<br>
+        <strong>Rows in Latest Score Week:</strong> ${escapeHtml(String((data.scoresSummary && data.scoresSummary.count) || 0))}
+      `;
+
+      const weekInput = document.getElementById('adminQuestionWeek');
+      if (weekInput) weekInput.value = data.weekNumber || 1;
+      populateAdminContentBlocks(data.contentBlocks || {}, true);
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .getAdminDashboard(ADMIN_PASSCODE);
+}
+
+function populateAdminContentBlocks(blocks, includeCampContent) {
+  populateAdminQuestionFields(blocks || {});
+  if (includeCampContent) populateAdminCampContentFields(blocks || {});
+  updateAdminQuestionWeekStatus(blocks || {});
+}
+
+function populateAdminQuestionFields(blocks) {
+  for (let i = 1; i <= 6; i++) {
+    setRichEditorHtml(`adminQ${i}`, blocks[`q${i}`] || '');
+    document.getElementById(`adminQ${i}Type`).value = blocks[`q${i}Type`] || 'cast';
+    document.getElementById(`adminQ${i}Options`).value = blocks[`q${i}Options`] || '';
+  }
+  document.getElementById('adminCommentPromptTemplate').value = blocks.commentPromptTemplate || '';
+}
+
+function populateAdminCampContentFields(blocks) {
+  setRichEditorHtml('adminCampAnnouncementsTitle', blocks.campAnnouncementsTitle || '');
+  setRichEditorHtml('adminCampAnnouncement1', blocks.campAnnouncement1 || '');
+  setRichEditorHtml('adminCampAnnouncement2', blocks.campAnnouncement2 || '');
+  setRichEditorHtml('adminCampAnnouncement3', blocks.campAnnouncement3 || '');
+  setRichEditorHtml('adminAtAGlanceTitle', blocks.atAGlanceTitle || '');
+  for (let i = 1; i <= 10; i++) {
+    setRichEditorHtml(`adminAtAGlance${i}`, blocks[`atAGlance${i}`] || '');
+  }
+}
+
+function updateAdminQuestionWeekStatus(blocks) {
+  const status = document.getElementById('adminQuestionWeekStatus');
+  if (!status) return;
+  const week = blocks.questionWeek || document.getElementById('adminQuestionWeek').value || '';
+  const source = blocks.hasSavedQuestionWeek
+    ? 'saved weekly question set'
+    : 'current config or past submitted pick labels';
+  status.textContent = week ? `Showing Week ${week} questions from ${source}.` : '';
+}
+
+function adminLoadQuestionWeek() {
+  const week = Number(document.getElementById('adminQuestionWeek').value || 0);
+  if (!week) {
+    showModal('Week Needed', 'Choose a week number to load.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(r => {
+      const blocks = (r && r.contentBlocks) || {};
+      document.getElementById('adminQuestionWeek').value = blocks.questionWeek || week;
+      populateAdminContentBlocks(blocks, false);
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .getAdminQuestionWeek(ADMIN_PASSCODE, week);
+}
+
+function adminUseCurrentQuestionWeek() {
+  const weekInput = document.getElementById('adminQuestionWeek');
+  if (weekInput && APP_DATA && APP_DATA.weekNumber) {
+    weekInput.value = APP_DATA.weekNumber;
+  }
+  adminLoadQuestionWeek();
+}
+
+function adminSetVoting(isOpen) {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Voting Updated', r.message || 'Voting updated.');
+      loadAdminDashboard();
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminSetVotingOpen(ADMIN_PASSCODE, isOpen);
+}
+
+function adminSaveRecap() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Recap Saved', r.message || 'Recap saved.');
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminSaveRecap(ADMIN_PASSCODE, {
+      week: document.getElementById('adminRecapWeek').value,
+      title: document.getElementById('adminRecapTitle').value,
+      body: document.getElementById('adminRecapBody').innerHTML
+    });
+}
+
+function adminSaveContentBlocks() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Camp Updated', r.message || 'Camp content updated.');
+      updateAdminQuestionWeekStatus({
+        questionWeek: r.week || document.getElementById('adminQuestionWeek').value,
+        hasSavedQuestionWeek: true
+      });
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminSaveContentBlocks(ADMIN_PASSCODE, {
+      questionWeek: document.getElementById('adminQuestionWeek').value,
+      q1: getRichEditorHtml('adminQ1'),
+      q2: getRichEditorHtml('adminQ2'),
+      q3: getRichEditorHtml('adminQ3'),
+      q4: getRichEditorHtml('adminQ4'),
+      q5: getRichEditorHtml('adminQ5'),
+      q6: getRichEditorHtml('adminQ6'),
+      q1Type: document.getElementById('adminQ1Type').value,
+      q1Options: document.getElementById('adminQ1Options').value,
+      q2Type: document.getElementById('adminQ2Type').value,
+      q2Options: document.getElementById('adminQ2Options').value,
+      q3Type: document.getElementById('adminQ3Type').value,
+      q3Options: document.getElementById('adminQ3Options').value,
+      q4Type: document.getElementById('adminQ4Type').value,
+      q4Options: document.getElementById('adminQ4Options').value,
+      q5Type: document.getElementById('adminQ5Type').value,
+      q5Options: document.getElementById('adminQ5Options').value,
+      q6Type: document.getElementById('adminQ6Type').value,
+      q6Options: document.getElementById('adminQ6Options').value,
+      commentPromptTemplate: document.getElementById('adminCommentPromptTemplate').value,
+      campAnnouncementsTitle: getRichEditorHtml('adminCampAnnouncementsTitle'),
+      campAnnouncement1: getRichEditorHtml('adminCampAnnouncement1'),
+      campAnnouncement2: getRichEditorHtml('adminCampAnnouncement2'),
+      campAnnouncement3: getRichEditorHtml('adminCampAnnouncement3'),
+      atAGlanceTitle: getRichEditorHtml('adminAtAGlanceTitle'),
+      atAGlance1: getRichEditorHtml('adminAtAGlance1'),
+      atAGlance2: getRichEditorHtml('adminAtAGlance2'),
+      atAGlance3: getRichEditorHtml('adminAtAGlance3'),
+      atAGlance4: getRichEditorHtml('adminAtAGlance4'),
+      atAGlance5: getRichEditorHtml('adminAtAGlance5'),
+      atAGlance6: getRichEditorHtml('adminAtAGlance6'),
+      atAGlance7: getRichEditorHtml('adminAtAGlance7'),
+      atAGlance8: getRichEditorHtml('adminAtAGlance8'),
+      atAGlance9: getRichEditorHtml('adminAtAGlance9'),
+      atAGlance10: getRichEditorHtml('adminAtAGlance10')
+    });
+}
+
+function adminSaveResults() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Results Saved', r.message || 'Results saved.');
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminSaveResults(ADMIN_PASSCODE, {
+      week: document.getElementById('adminResultsWeek').value,
+      q1: document.getElementById('adminResultQ1').value,
+      q1Points: document.getElementById('adminResultQ1Points').value,
+      q2: document.getElementById('adminResultQ2').value,
+      q2Points: document.getElementById('adminResultQ2Points').value,
+      q3: document.getElementById('adminResultQ3').value,
+      q3Points: document.getElementById('adminResultQ3Points').value,
+      q4: document.getElementById('adminResultQ4').value,
+      q4Points: document.getElementById('adminResultQ4Points').value,
+      q5: document.getElementById('adminResultQ5').value,
+      q5Points: document.getElementById('adminResultQ5Points').value,
+      q6: document.getElementById('adminResultQ6').value,
+      q6Points: document.getElementById('adminResultQ6Points').value,
+      bonus: document.getElementById('adminResultBonus').value,
+      bonusPoints: document.getElementById('adminResultBonusPoints').value
+    });
+}
+
+function adminRecalculateScores() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Scores Recalculated', r.message || 'Scores recalculated.');
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminRecalculateScores(ADMIN_PASSCODE);
+}
+
+function adminAdvanceWeek() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Week Advanced', r.message || 'Week advanced.');
+      loadAppData();
+      loadAdminDashboard();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminAdvanceWeek(ADMIN_PASSCODE);
+}
+
+function adminAddBonus() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Bonus Saved', r.message || 'Bonus saved.');
+      loadBonusLog();
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminAddBonus(ADMIN_PASSCODE, {
+      week: document.getElementById('adminBonusWeek').value,
+      player: document.getElementById('adminBonusPlayer').value,
+      points: document.getElementById('adminBonusPoints').value,
+      reason: document.getElementById('adminBonusReason').value
+    });
+}
+
+function formatEditor(event, editorId, command) {
+  if (event) event.preventDefault();
+  const editor = document.getElementById(editorId);
+  if (!editor) return;
+  editor.focus();
+  document.execCommand(command, false, null);
+}
+
+function insertEditorLink(event, editorId) {
+  if (event) event.preventDefault();
+  const editor = document.getElementById(editorId);
+  if (!editor) return;
+  editor.focus();
+  const url = prompt('Enter the full URL:');
+  if (!url) return;
+  document.execCommand('createLink', false, url);
+}
+
+function getRichEditorHtml(id) {
+  const editor = document.getElementById(id);
+  return editor ? editor.innerHTML.trim() : '';
+}
+
+function setRichEditorHtml(id, html) {
+  const editor = document.getElementById(id);
+  if (editor) editor.innerHTML = html || '';
+}
+
+function startCountdown(targetId, iso, endedText) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  if (!iso) {
+    el.textContent = '--';
+    return;
+  }
+
+  function tick() {
+    const now = new Date();
+    const target = new Date(iso);
+    const diff = target.getTime() - now.getTime();
+
+    if (diff <= 0) {
+      el.textContent = endedText || 'Live';
+      return;
+    }
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    parts.push(`${hours}h`);
+    parts.push(`${mins}m`);
+    parts.push(`${secs}s`);
+    el.textContent = parts.join(' ');
+  }
+
+  tick();
+  setInterval(tick, 1000);
+}
+
+function initDropZone() {
+  const dropZone = document.getElementById('dropZone');
+  const photoInput = document.getElementById('photoInput');
+
+  if (!dropZone || !photoInput) return;
+
+  dropZone.addEventListener('click', () => photoInput.click());
+
+  photoInput.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (file) loadPhotoFile(file);
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+    });
+  });
+
+  dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) loadPhotoFile(file);
+  });
+}
+
+function loadPhotoFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showModal('Invalid File', 'Please upload an image file.');
+    return;
+  }
+
+  PHOTO_FILE_NAME = file.name;
+  PHOTO_MIME_TYPE = file.type;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    PHOTO_DATA_URL = e.target.result || '';
+    document.getElementById('photoPreview').src = PHOTO_DATA_URL;
+    document.getElementById('photoPreviewWrap').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function uploadPhoto() {
+  if (!APP_DATA) return;
+  if (!ADMIN_PASSCODE) {
+    showModal('Admin Only', 'Unlock the Admin Tribe Council before uploading game photos.');
+    return;
+  }
+  const name = document.getElementById('photoName').value.trim();
+  const email = document.getElementById('photoEmail').value.trim();
+  const caption = document.getElementById('photoCaption').value.trim();
+
+  if (!name) {
+    showModal('Missing Name', 'Please enter your player name.');
+    return;
+  }
+  if (!PHOTO_DATA_URL) {
+    showModal('Missing Photo', 'Please choose a photo first.');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Snapshot Added', r.message || 'Photo uploaded.');
+      document.getElementById('photoCaption').value = '';
+      document.getElementById('photoPreviewWrap').classList.add('hidden');
+      PHOTO_DATA_URL = '';
+      PHOTO_FILE_NAME = '';
+      PHOTO_MIME_TYPE = '';
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Upload Error', getErrorMessage(err)))
+    .uploadTribePhoto(ADMIN_PASSCODE, {
+      week: Number(document.getElementById('adminRecapWeek').value || APP_DATA.weekNumber),
+      name,
+      email,
+      caption,
+      dataUrl: PHOTO_DATA_URL,
+      fileName: PHOTO_FILE_NAME,
+      mimeType: PHOTO_MIME_TYPE
+    });
+}
+
+function showModal(title, message) {
+  document.getElementById('modalTitle').textContent = title || 'Notice';
+  document.getElementById('modalBody').innerHTML = `<p>${escapeHtml(message || '')}</p>`;
+  document.getElementById('parchmentModal').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('parchmentModal').classList.add('hidden');
+}
+
+function getErrorMessage(err) {
+  if (!err) return 'Unknown error';
+  return err.message || String(err);
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function stripHtml(value) {
+  const div = document.createElement('div');
+  div.innerHTML = value || '';
+  return (div.textContent || div.innerText || '').trim();
+}
+</script>
+</body>
+</html>
