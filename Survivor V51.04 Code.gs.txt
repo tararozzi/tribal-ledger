@@ -8,16 +8,17 @@ const GAME_SHEETS_51 = {
   WEEKSCORING: 'WeekScoring',
   SCORES: 'Scores',
   PLAYERBONUSES: 'PlayerBonuses',
-  CAMPCONTRIBUTIONS: 'CampContributions',
   WEEKRECAPS: 'WeekRecaps',
   PHOTOS: 'Photos',
-  QUESTIONWEEKS: 'QuestionWeeks'
+  QUESTIONWEEKS: 'QuestionWeeks',
+  REACTIONS: 'Reactions',
+  COMMENTS: 'Comments'
 };
 
 const GAME_HEADERS_51 = {
   CONFIG: ['Key', 'Value'],
-  PLAYERS: ['Name', 'Email', 'Active', 'PhotoUrl'],
-  CAST: ['Name', 'Status', 'PhotoUrl', 'Team', 'TeamPhotoUrl'],
+  PLAYERS: ['Name', 'Active', 'TribalKey'],
+  CAST: ['Name', 'Status', 'PhotoUrl', 'Team', 'Bio', 'Age', 'Hometown', 'Occupation', 'Details'],
   PICKS: [
     'Timestamp',
     'Week',
@@ -29,7 +30,8 @@ const GAME_HEADERS_51 = {
     'Q4_Label', 'Q4_Pick',
     'Q5_Label', 'Q5_Pick',
     'Q6_Label', 'Q6_Pick',
-    'Bonus_Label', 'Bonus_Pick',
+    'Q7_Label', 'Q7_Pick',
+    'Q8_Label', 'Q8_Pick',
     'Comment_Label', 'Comment_Text',
     'SubmittedByAdmin',
     'AutoAssigned',
@@ -43,35 +45,76 @@ const GAME_HEADERS_51 = {
     'Q4_Correct', 'Q4_Points',
     'Q5_Correct', 'Q5_Points',
     'Q6_Correct', 'Q6_Points',
-    'Bonus_Correct', 'Bonus_Points',
+    'Q7_Correct', 'Q7_Points',
+    'Q8_Correct', 'Q8_Points',
     'Q1_CorrectPlus', 'Q1_CorrectPlus_Points',
     'Q1_CorrectMinus', 'Q1_CorrectMinus_Points'
   ],
   SCORES: ['Week', 'Name', 'Email', 'WeekPoints', 'RunningTotal', 'Rank'],
   PLAYERBONUSES: ['Week', 'Player', 'Points', 'Reason'],
-  CAMPCONTRIBUTIONS: ['Week', 'Player', 'Points', 'Reason'],
   WEEKRECAPS: ['Week', 'Title', 'RecapHtml'],
   PHOTOS: ['Timestamp', 'Week', 'Name', 'Email', 'Caption', 'PhotoUrl', 'DriveFileId', 'Approved'],
+  REACTIONS: ['Timestamp', 'TargetId', 'TargetType', 'Week', 'Reaction', 'SessionId', 'Name'],
+  COMMENTS: ['CommentId', 'Timestamp', 'Week', 'Name', 'Comment', 'Pinned', 'Deleted'],
   QUESTIONWEEKS: [
     'Week',
-    'Q1', 'Q1Type', 'Q1Options',
-    'Q2', 'Q2Type', 'Q2Options',
-    'Q3', 'Q3Type', 'Q3Options',
-    'Q4', 'Q4Type', 'Q4Options',
-    'Q5', 'Q5Type', 'Q5Options',
-    'Q6', 'Q6Type', 'Q6Options',
-    'BonusQ', 'BonusType', 'BonusOptions',
+    'Q1', 'Q1Points', 'Q1Type', 'Q1Options',
+    'Q2', 'Q2Points', 'Q2Type', 'Q2Options',
+    'Q3', 'Q3Points', 'Q3Type', 'Q3Options',
+    'Q4', 'Q4Points', 'Q4Type', 'Q4Options',
+    'Q5', 'Q5Points', 'Q5Type', 'Q5Options',
+    'Q6', 'Q6Points', 'Q6Type', 'Q6Options',
+    'Q7', 'Q7Points', 'Q7Type', 'Q7Options',
+    'Q8', 'Q8Points', 'Q8Type', 'Q8Options',
     'CommentPromptTemplate'
   ]
 };
 
 const SURVIVOR_THEMED_AUTO_COMMENTS = [
-  'The tribe had to choose for you this round.',
-  'Your parchment was missing, so camp made the call.',
-  'The island decided your fate while you were away from camp.',
-  'No vote was cast, so the tribe stepped in.',
-  'Your torch stayed lit, but the tribe filled in your answers.'
+  'I was too busy searching for a hidden immunity idol to answer this question.',
+  'Jeff snuffed my attention span before I could finish typing.',
+  'Camp life got rough and I missed Tribal again.',
+  'My alliance told me the deadline was tomorrow. Suspicious behavior, honestly.',
+  'I went looking for firewood and somehow lost an entire voting window.',
+  'I was practicing my Final Tribal speech and forgot this Tribal Council was happening.',
+  'The tribe asked for my thoughts, but I was face-first in the shelter pretending to be useful.',
+  'I got blindsided by the deadline. Classic merge episode energy.',
+  'I hid from the vote so well that even I could not find my parchment.',
+  'I was on a reward challenge in my imagination and missed the whole thing.',
+  'I trusted the wrong alliance member with calendar management.',
+  'I was conserving energy for immunity and accidentally conserved all my answers too.',
+  'The jungle whispered "five more minutes" and I believed it.',
+  'I thought this was a non-elimination episode for my responsibilities.',
+  'My strategy was to lay low. Possibly too low.'
 ];
+
+const SURVIVOR_THEMED_AUTO_COMMENT_TOPICS = {
+  idol: [
+    'I was too busy digging for an idol that was absolutely not there.',
+    'I found three suspicious sticks and zero time to answer this question.',
+    'I followed an idol clue into the woods and came back after the deadline.'
+  ],
+  alliance: [
+    'My alliance said they had this covered, which is exactly what a bad alliance would say.',
+    'I trusted my alliance with the deadline and immediately regretted that social game.',
+    'I was busy making a final three deal with everyone at camp.'
+  ],
+  blindside: [
+    'I got blindsided by the clock, and the clock did not even split the vote.',
+    'The deadline came out of nowhere with a perfect blindside.',
+    'I would explain my read, but the schedule pulled off the bigger move.'
+  ],
+  strategy: [
+    'My strategy was to stay under the radar, and apparently under the deadline too.',
+    'I call this a bold social experiment in letting fate make my picks.',
+    'I was workshopping a master plan and forgot step one was submitting it.'
+  ],
+  challenge: [
+    'I was saving my energy for immunity and forgot typing was also a challenge.',
+    'The real challenge was remembering the deadline, and I did not win immunity.',
+    'I dropped my focus before the puzzle portion.'
+  ]
+};
 
 /* =========================
    ONE-TIME SETUP
@@ -91,12 +134,15 @@ function setupSurvivorApp_FAST() {
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKSCORING, GAME_HEADERS_51.WEEKSCORING);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.SCORES, GAME_HEADERS_51.SCORES);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PLAYERBONUSES, GAME_HEADERS_51.PLAYERBONUSES);
-    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAMPCONTRIBUTIONS, GAME_HEADERS_51.CAMPCONTRIBUTIONS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKRECAPS, GAME_HEADERS_51.WEEKRECAPS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PHOTOS, GAME_HEADERS_51.PHOTOS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.QUESTIONWEEKS, GAME_HEADERS_51.QUESTIONWEEKS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.REACTIONS, GAME_HEADERS_51.REACTIONS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.COMMENTS, GAME_HEADERS_51.COMMENTS);
 
     seedAppConfigIfMissing_();
+    migrateLegacyTeamConfig_();
+    removeLegacyBonusQuestionConfig_();
     formatAllSheets_();
 
     return {
@@ -118,6 +164,10 @@ function seedAppConfigIfMissing_() {
     TribeLedgerTitle: 'The Tribal Ledger',
     TribeLedgerSubtitle: 'Outwit • Outplay • Outlast • Outscore',
     WeekNumber: 1,
+    FinalWeek: 13,
+    MergeWeek: 8,
+    SeasonPhaseMode: 'AUTO',
+    SeasonPhaseManual: 'premiere',
     Timezone: 'America/Los_Angeles',
     VotingOpen: 'AUTO',
     CloseDay: 'Wednesday',
@@ -129,32 +179,45 @@ function seedAppConfigIfMissing_() {
     AdminPasscode: '',
     AdminEmail: Session.getActiveUser().getEmail() || '',
     Q1: '',
+    Q1Points: 5,
     Q1Type: 'cast',
     Q1Options: '',
     Q2: '',
+    Q2Points: 5,
     Q2Type: 'cast',
     Q2Options: '',
     Q3: '',
+    Q3Points: 5,
     Q3Type: 'cast',
     Q3Options: '',
     Q4: '',
+    Q4Points: 5,
     Q4Type: 'cast',
     Q4Options: '',
     Q5: '',
+    Q5Points: 5,
     Q5Type: 'cast',
     Q5Options: '',
     Q6: '',
+    Q6Points: 5,
     Q6Type: 'cast',
     Q6Options: '',
-    BonusQ: '',
-    BonusType: 'cast',
-    BonusOptions: '',
+    Q7: '',
+    Q7Points: 5,
+    Q7Type: 'cast',
+    Q7Options: '',
+    Q8: '',
+    Q8Points: 5,
+    Q8Type: 'cast',
+    Q8Options: '',
     CommentPromptTemplate: 'Campfire thoughts',
     CampAnnouncementsTitle: 'Camp Announcements',
     CampAnnouncement1: '',
     CampAnnouncement2: '',
     CampAnnouncement3: '',
-    AtAGlanceTitle: 'Camp Rules',
+    CampAnnouncement4: '',
+    CampAnnouncement5: '',
+    AtAGlanceTitle: 'How to Play',
     AtAGlance1: '',
     AtAGlance2: '',
     AtAGlance3: '',
@@ -168,8 +231,14 @@ function seedAppConfigIfMissing_() {
     PhotoUploadTitle: 'Tribe Snapshots',
     PhotoUploadInstructions: 'Drop your Survivor-themed photo here for the tribe.',
     PhotoDriveFolderId: '',
-    Teams: '',
-    TeamPhotos: ''
+    InteractionsEnabled: 'TRUE',
+    CommentsEnabled: 'TRUE',
+    Team1Name: '',
+    Team1PhotoUrl: '',
+    Team2Name: '',
+    Team2PhotoUrl: '',
+    Team3Name: '',
+    Team3PhotoUrl: ''
   };
 
   Object.keys(defaults).forEach(key => {
@@ -177,6 +246,35 @@ function seedAppConfigIfMissing_() {
       setConfigValue_(configSheet, key, defaults[key]);
     }
   });
+}
+
+function migrateLegacyTeamConfig_() {
+  const ss = SpreadsheetApp.getActive();
+  const configSheet = mustGetSheet_(ss, GAME_SHEETS_51.CONFIG);
+  const config = readConfig_(configSheet);
+  const legacyTeams = splitList_(config.Teams);
+  const legacyPhotos = splitList_(config.TeamPhotos);
+
+  for (let i = 1; i <= 3; i++) {
+    if (!String(config[`Team${i}Name`] || '').trim() && legacyTeams[i - 1]) {
+      setConfigValue_(configSheet, `Team${i}Name`, legacyTeams[i - 1]);
+    }
+    if (!String(config[`Team${i}PhotoUrl`] || '').trim() && legacyPhotos[i - 1]) {
+      setConfigValue_(configSheet, `Team${i}PhotoUrl`, legacyPhotos[i - 1]);
+    }
+  }
+
+  removeConfigKey_(configSheet, 'Teams');
+  removeConfigKey_(configSheet, 'TeamPhotos');
+  const castSheet = mustGetSheet_(ss, GAME_SHEETS_51.CAST);
+  if (castSheet.getMaxColumns() > GAME_HEADERS_51.CAST.length) {
+    castSheet.deleteColumns(GAME_HEADERS_51.CAST.length + 1, castSheet.getMaxColumns() - GAME_HEADERS_51.CAST.length);
+  }
+}
+
+function removeLegacyBonusQuestionConfig_() {
+  const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), GAME_SHEETS_51.CONFIG);
+  ['BonusQ', 'BonusType', 'BonusOptions'].forEach(key => removeConfigKey_(configSheet, key));
 }
 
 function formatAllSheets_() {
@@ -205,6 +303,7 @@ function recalculateScores() {
 
   try {
     const ss = SpreadsheetApp.getActive();
+    const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
     const picks = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PICKS)), buildCanonicalNameMap_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERS))));
     const scoringByWeek = buildScoringMap_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING)));
     const scoresSheet = mustGetSheet_(ss, GAME_SHEETS_51.SCORES);
@@ -219,7 +318,7 @@ function recalculateScores() {
 
     weeks.forEach(week => {
       const weekRows = picks.filter(r => Number(r.Week || 0) === week);
-      const rule = scoringByWeek[week];
+      const rule = applyQuestionPointsToScoringRule51_(week, scoringByWeek[week], config);
 
       const ranking = weekRows.map(row => {
         const playerName = String(row.Name || '').trim();
@@ -256,12 +355,22 @@ function recalculateScores() {
       scoresSheet.getRange(2, 1, out.length, GAME_HEADERS_51.SCORES.length).setValues(out);
     }
 
-    refreshCampContributionsLog51_();
-
     return { ok: true, message: 'Scores recalculated.' };
   } finally {
     lock.releaseLock();
   }
+}
+
+function applyQuestionPointsToScoringRule51_(week, rule, fallbackConfig) {
+  const out = Object.assign({}, rule || {});
+  const questionConfig = typeof getQuestionConfigForWeek_ === 'function'
+    ? getQuestionConfigForWeek_(week, fallbackConfig || {})
+    : (fallbackConfig || {});
+  for (let i = 1; i <= 8; i++) {
+    const points = pointValueOrBlank_(questionConfig[`Q${i}Points`]);
+    if (points !== '') out[`Q${i}_Points`] = points;
+  }
+  return out;
 }
 
 function computeWeekPoints51_(pick, rule) {
@@ -272,7 +381,8 @@ function computeWeekPoints51_(pick, rule) {
   points += scoreAnswer51_(pick.Q4_Pick, rule.Q4_Correct, rule.Q4_Points);
   points += scoreAnswer51_(pick.Q5_Pick, rule.Q5_Correct, rule.Q5_Points);
   points += scoreAnswer51_(pick.Q6_Pick, rule.Q6_Correct, rule.Q6_Points);
-  points += scoreAnswer51_(pick.Bonus_Pick, rule.Bonus_Correct, rule.Bonus_Points);
+  points += scoreAnswer51_(pick.Q7_Pick, rule.Q7_Correct, rule.Q7_Points);
+  points += scoreAnswer51_(pick.Q8_Pick, rule.Q8_Correct, rule.Q8_Points);
 
   if (matchesCorrect51_(pick.Q1_Pick, rule.Q1_CorrectPlus)) {
     points += toNumberOrDefault_(rule.Q1_CorrectPlus_Points, 4);
@@ -306,27 +416,6 @@ function getManualBonusPoints51_(ss, week, playerName) {
     const pts = Number(row.Points || 0);
     return rowWeek === week && rowPlayer === target && Number.isFinite(pts) ? sum + pts : sum;
   }, 0);
-}
-
-function refreshCampContributionsLog51_() {
-  const ss = SpreadsheetApp.getActive();
-  const rows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES));
-  const sheet = mustGetSheet_(ss, GAME_SHEETS_51.CAMPCONTRIBUTIONS);
-
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, GAME_HEADERS_51.CAMPCONTRIBUTIONS.length)
-    .setValues([GAME_HEADERS_51.CAMPCONTRIBUTIONS]);
-
-  if (!rows.length) return;
-
-  const values = rows.map(r => [
-    Number(r.Week || 0) || '',
-    String(r.Player || ''),
-    Number(r.Points || 0) || '',
-    String(r.Reason || '')
-  ]);
-
-  sheet.getRange(2, 1, values.length, GAME_HEADERS_51.CAMPCONTRIBUTIONS.length).setValues(values);
 }
 
 function dedupeLatestPicks_(rows, canonicalByKey) {
@@ -420,7 +509,7 @@ function autoFillMissingPicks() {
         name: String(player.Name || '').trim(),
         email: String(player.Email || '').trim(),
         commentLabel: String(questionConfig.CommentPromptTemplate || 'Campfire thoughts'),
-        commentText: pickRandom_(SURVIVOR_THEMED_AUTO_COMMENTS)
+        commentText: generateAutoFreeTextResponse_(questionConfig.CommentPromptTemplate, player, week)
       };
 
       questionDefs.forEach(q => {
@@ -490,6 +579,7 @@ function adminSaveResults(passcode, payload) {
   verifyAdminPasscodeOrThrow_(passcode);
 
   const ss = SpreadsheetApp.getActive();
+  ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKSCORING, GAME_HEADERS_51.WEEKSCORING);
   const sheet = mustGetSheet_(ss, GAME_SHEETS_51.WEEKSCORING);
   const headers = getHeaders_(sheet);
   const rows = readTable_(sheet);
@@ -497,22 +587,33 @@ function adminSaveResults(passcode, payload) {
 
   if (!week) throw new Error('Missing week number.');
 
+  const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
+  const questionConfig = typeof getQuestionConfigForWeek_ === 'function'
+    ? getQuestionConfigForWeek_(week, config)
+    : config;
+  const questionPoints = {};
+  for (let i = 1; i <= 8; i++) {
+    questionPoints[`Q${i}_Points`] = pointValueOrBlank_(questionConfig[`Q${i}Points`]);
+  }
+
   const record = {
     Week: week,
     Q1_Correct: String(payload.q1 || '').trim(),
-    Q1_Points: pointValueOrBlank_(payload.q1Points),
+    Q1_Points: questionPoints.Q1_Points,
     Q2_Correct: String(payload.q2 || '').trim(),
-    Q2_Points: pointValueOrBlank_(payload.q2Points),
+    Q2_Points: questionPoints.Q2_Points,
     Q3_Correct: String(payload.q3 || '').trim(),
-    Q3_Points: pointValueOrBlank_(payload.q3Points),
+    Q3_Points: questionPoints.Q3_Points,
     Q4_Correct: String(payload.q4 || '').trim(),
-    Q4_Points: pointValueOrBlank_(payload.q4Points),
+    Q4_Points: questionPoints.Q4_Points,
     Q5_Correct: String(payload.q5 || '').trim(),
-    Q5_Points: pointValueOrBlank_(payload.q5Points),
+    Q5_Points: questionPoints.Q5_Points,
     Q6_Correct: String(payload.q6 || '').trim(),
-    Q6_Points: pointValueOrBlank_(payload.q6Points),
-    Bonus_Correct: String(payload.bonus || '').trim(),
-    Bonus_Points: pointValueOrBlank_(payload.bonusPoints),
+    Q6_Points: questionPoints.Q6_Points,
+    Q7_Correct: String(payload.q7 || '').trim(),
+    Q7_Points: questionPoints.Q7_Points,
+    Q8_Correct: String(payload.q8 || '').trim(),
+    Q8_Points: questionPoints.Q8_Points,
     Q1_CorrectPlus: String(payload.q1CorrectPlus || '').trim(),
     Q1_CorrectPlus_Points: toNumberOrDefault_(payload.q1CorrectPlusPoints, 4),
     Q1_CorrectMinus: String(payload.q1CorrectMinus || '').trim(),
@@ -570,7 +671,7 @@ function adminAddBonus(passcode, payload) {
   const week = Number(payload.week || 0);
   const player = String(payload.player || '').trim();
   const points = Number(payload.points || 0);
-  const reason = String(payload.reason || '').trim();
+  const reason = sanitizeHtml51_(String(payload.reason || '').trim());
 
   if (!week) throw new Error('Missing week.');
   if (!player) throw new Error('Missing player.');
@@ -601,7 +702,7 @@ function uploadTribePhoto(passcode, payload) {
   const week = Number(payload.week || config.WeekNumber || 1);
   const name = String(payload.name || 'Admin').trim();
   const email = String(payload.email || '').trim();
-  const caption = String(payload.caption || '').trim();
+  const caption = sanitizeHtml51_(String(payload.caption || '').trim());
   const dataUrl = String(payload.dataUrl || '').trim();
   const mimeType = String(payload.mimeType || '').trim();
   const fileName = String(payload.fileName || `tribe-photo-week-${week}`).trim();
@@ -644,16 +745,37 @@ function uploadTribePhoto(passcode, payload) {
 ========================= */
 
 function ensureSheetWithHeaders_(ss, sheetName, headers) {
+  if (!sheetName) throw new Error('Missing sheet name while ensuring headers.');
+  if (!headers || !headers.length) throw new Error(`Missing headers for sheet: ${sheetName}`);
   const sheet = getOrCreateSheet_(ss, sheetName);
   const existingHeaders = sheet.getLastRow() > 0 ? getHeaders_(sheet) : [];
-  const matches =
-    existingHeaders.length === headers.length &&
-    headers.every((h, i) => h === existingHeaders[i]);
+  if (existingHeaders.length && headers.every((h, i) => existingHeaders[i] === h)) {
+    const missingHeaders = headers.slice(existingHeaders.length);
+    if (missingHeaders.length) {
+      sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+    }
+    return sheet;
+  }
+
+  const matches = existingHeaders.length === headers.length && headers.every((h, i) => h === existingHeaders[i]);
 
   if (!matches) {
+    const existingValues = sheet.getLastRow() > 1
+      ? sheet.getRange(2, 1, sheet.getLastRow() - 1, existingHeaders.length).getValues()
+      : [];
+    const remappedValues = existingValues.map(row => headers.map(header => {
+      const oldIndex = existingHeaders.indexOf(header);
+      return oldIndex >= 0 ? row[oldIndex] : '';
+    }));
+
     sheet.clearContents();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (remappedValues.length) {
+      sheet.getRange(2, 1, remappedValues.length, headers.length).setValues(remappedValues);
+    }
   }
+
+  return sheet;
 }
 
 function getOrCreateSheet_(ss, name) {
@@ -689,6 +811,7 @@ function readTable_(sheet) {
 }
 
 function getHeaders_(sheet) {
+  if (!sheet) throw new Error('Missing sheet while reading headers.');
   if (sheet.getLastRow() === 0) return [];
   return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
 }
@@ -704,6 +827,15 @@ function setConfigValue_(sheet, key, value) {
   sheet.appendRow([key, value]);
 }
 
+function removeConfigKey_(sheet, key) {
+  const values = sheet.getDataRange().getValues();
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (String(values[i][0] || '').trim() === key) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
 function splitList_(value) {
   return String(value || '')
     .split(',')
@@ -714,6 +846,53 @@ function splitList_(value) {
 function pickRandom_(arr) {
   if (!arr || !arr.length) return '';
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateAutoFreeTextResponse_(prompt, player, week) {
+  const plainPrompt = String(prompt || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  const topicPool = [];
+
+  if (/\bidol|advantage|clue|hidden\b/.test(plainPrompt)) {
+    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.idol);
+  }
+  if (/\balliance|trust|loyal|social|vote with\b/.test(plainPrompt)) {
+    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.alliance);
+  }
+  if (/\bblindside|surprise|shocking|betray|flip\b/.test(plainPrompt)) {
+    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.blindside);
+  }
+  if (/\bstrategy|move|plan|gameplay|threat|target\b/.test(plainPrompt)) {
+    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.strategy);
+  }
+  if (/\bchallenge|immunity|reward|puzzle\b/.test(plainPrompt)) {
+    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.challenge);
+  }
+
+  const playerName = String(player && player.Name || '').trim();
+  const weekTag = week ? ` Week ${week}` : '';
+  const personalized = [
+    `${playerName || 'This castaway'} missed Tribal${weekTag} and is blaming the jungle calendar.`,
+    `${playerName || 'This castaway'} was last seen whispering "I have the numbers" to a coconut.`,
+    `${playerName || 'This castaway'} tried to play an expired parchment as an advantage.`,
+    `${playerName || 'This castaway'} was too busy searching for a hidden immunity idol to answer this question.`,
+    `${playerName || 'This castaway'} had their torch snuffed by Jeff before they could finish typing.`,
+    `${playerName || 'This castaway'} felt that camp life got too rough and missed Tribal again.`,
+    `${playerName || 'This castaway'} got lost on the way back from the reward challenge.`,
+    `${playerName || 'This castaway'} trusted their alliance to remind them… rookie mistake.`,
+    `${playerName || 'This castaway'} played their Shot in the Dark and lost track of time.`,
+    `${playerName || 'This castaway'} wandered off looking for advantages and forgot to vote.`,
+    `${playerName || 'This castaway'} accidentally formed an alliance with the wrong time zone.`,
+    `${playerName || 'This castaway'} was practicing fire-making instead of answering questions.`,
+    `${playerName || 'This castaway'} got blindsided by the deadline.`,
+    `${playerName || 'This castaway'} was rationing rice and forgot to submit their picks.`,
+    `${playerName || 'This castaway'}'s alliance told them that the deadline was tomorrow….`
+  ];
+
+  return pickRandom_([].concat(topicPool, SURVIVOR_THEMED_AUTO_COMMENTS, personalized));
 }
 
 function normalizeAnswer51_(value) {
@@ -801,4 +980,12 @@ function sanitizeFileName_(value) {
   return String(value || 'upload')
     .replace(/[^\w.\- ]+/g, '')
     .trim() || 'upload';
+}
+
+function sanitizeHtml51_(html) {
+  if (typeof sanitizeHtml_ === 'function') return sanitizeHtml_(html);
+  return String(html || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '');
 }
