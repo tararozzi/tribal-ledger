@@ -4314,7 +4314,20 @@ function createAppsScriptRunBridge(state = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ functionName, args })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const text = await res.text();
+        let payload;
+        try {
+          payload = JSON.parse(text);
+        } catch (err) {
+          throw new Error(`Vercel API did not return JSON. Check that api/apps-script.js is deployed. Response started with: ${text.slice(0, 80)}`);
+        }
+        if (!res.ok && payload && payload.ok !== false) {
+          payload.ok = false;
+          payload.error = payload.error || `Vercel API request failed with status ${res.status}.`;
+        }
+        return payload;
+      })
       .then(payload => {
         if (!payload || payload.ok === false) {
           throw new Error((payload && payload.error) || 'Apps Script request failed.');
