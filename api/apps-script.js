@@ -16,6 +16,16 @@ module.exports = async function handler(req, res) {
     });
 
     const text = await response.text();
+
+    try {
+      JSON.parse(text);
+    } catch (err) {
+      return res.status(502).json({
+        ok: false,
+        error: `Apps Script did not return JSON. Redeploy the Apps Script web app as a new version and make sure access is set to Anyone. Response started with: ${text.slice(0, 120)}`
+      });
+    }
+
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.status(response.ok ? 200 : response.status).send(text);
   } catch (err) {
