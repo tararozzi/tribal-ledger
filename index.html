@@ -4279,7 +4279,7 @@ let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
-const APPS_SCRIPT_EXEC_URL = window.SURVIVOR51_APPS_SCRIPT_EXEC_URL || 'https://script.google.com/macros/s/AKfycbwXgdouIYuy878sW3dcqGOyTIhBVdoKI-ICo-jCq0tjP_kv10A6XsjS9s8zLuasDmtn/exec';
+const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
 const FALLBACK_REACTION_TYPES = [
   { key: 'bold-move', emoji: '🔥', label: 'Bold Move' },
   { key: 'sneaky', emoji: '🐍', label: 'Sneaky' },
@@ -4301,17 +4301,17 @@ if (!window.google || !window.google.script || !window.google.script.run) {
 
 function createAppsScriptRunBridge(state = {}) {
   const runCall = (functionName, args) => {
-    const execUrl = String(APPS_SCRIPT_EXEC_URL || '').trim();
-    if (!execUrl || execUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_EXEC_URL_HERE')) {
-      const err = new Error('Missing Google Apps Script /exec URL. Set APPS_SCRIPT_EXEC_URL in Index.html before deploying to Vercel.');
+    const apiUrl = String(APPS_SCRIPT_API_URL || '').trim();
+    if (!apiUrl) {
+      const err = new Error('Missing Vercel Apps Script API URL.');
       if (state.failure) state.failure(err);
       else throw err;
       return;
     }
 
-    fetch(`${execUrl}?mode=json`, {
+    fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ functionName, args })
     })
       .then(res => res.json())
