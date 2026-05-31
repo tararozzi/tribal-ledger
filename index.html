@@ -142,7 +142,7 @@
 
       <section id="castStatus" class="section">
         <div class="card cast-status-page">
-          <h2 class="section-title">Cast Status - click to view bio</h2>
+          <h2 class="section-title">Cast Status</h2>
           <div id="castGrid" class="cast-grid"></div>
         </div>
       </section>
@@ -822,6 +822,17 @@
                 <button class="btn btn-primary" type="button" onclick="adminSaveRecap()">Save Recap</button>
               </div>
 
+              <div class="admin-email-panel">
+                <h3 class="section-title mini">Player Update Email</h3>
+                <p class="subtle">Generate this after correct answers, scores, and the weekly recap are updated.</p>
+                <div class="form-actions">
+                  <button class="btn btn-secondary" type="button" onclick="adminPreviewPlayerUpdateEmail()">Generate Preview</button>
+                  <button class="btn btn-primary" type="button" onclick="adminSendPlayerUpdateEmail()">Send to Admin Emails</button>
+                </div>
+                <div id="adminEmailStatus" class="tiny-note"></div>
+                <div id="adminEmailPreview" class="admin-email-preview hidden"></div>
+              </div>
+
               <div class="recap-photo-manager">
                 <h3 class="section-title mini">Campfire Memories Photos</h3>
                 <p class="subtle">Upload photos for the same week as this recap.</p>
@@ -970,6 +981,7 @@ let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
+const APPS_SCRIPT_EXEC_URL = window.SURVIVOR51_APPS_SCRIPT_EXEC_URL || 'https://script.google.com/macros/s/AKfycb.../exec';
 const FALLBACK_REACTION_TYPES = [
   { key: 'bold-move', emoji: '🔥', label: 'Bold Move' },
   { key: 'sneaky', emoji: '🐍', label: 'Sneaky' },
@@ -981,6 +993,53 @@ const FALLBACK_REACTION_TYPES = [
 if (!INTERACTION_SESSION_ID) {
   INTERACTION_SESSION_ID = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   localStorage.setItem('survivor51_reaction_session', INTERACTION_SESSION_ID);
+}
+
+if (!window.google || !window.google.script || !window.google.script.run) {
+  window.google = window.google || {};
+  window.google.script = window.google.script || {};
+  window.google.script.run = createAppsScriptRunBridge();
+}
+
+function createAppsScriptRunBridge(state = {}) {
+  const runCall = (functionName, args) => {
+    const execUrl = String(APPS_SCRIPT_EXEC_URL || '').trim();
+    if (!execUrl || execUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_EXEC_URL_HERE')) {
+      const err = new Error('Missing Google Apps Script /exec URL. Set APPS_SCRIPT_EXEC_URL in Index.html before deploying to Vercel.');
+      if (state.failure) state.failure(err);
+      else throw err;
+      return;
+    }
+
+    fetch(`${execUrl}?mode=json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ functionName, args })
+    })
+      .then(res => res.json())
+      .then(payload => {
+        if (!payload || payload.ok === false) {
+          throw new Error((payload && payload.error) || 'Apps Script request failed.');
+        }
+        if (state.success) state.success(payload.result);
+      })
+      .catch(err => {
+        if (state.failure) state.failure(err);
+        else console.error(err);
+      });
+  };
+
+  return new Proxy({}, {
+    get(_target, prop) {
+      if (prop === 'withSuccessHandler') {
+        return success => createAppsScriptRunBridge({ ...state, success });
+      }
+      if (prop === 'withFailureHandler') {
+        return failure => createAppsScriptRunBridge({ ...state, failure });
+      }
+      return (...args) => runCall(String(prop), args);
+    }
+  });
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -2196,6 +2255,10 @@ function loadAdminDashboard() {
       if (resultsWeekInput && !resultsWeekInput.value) resultsWeekInput.value = data.weekNumber || 1;
       const bonusWeekInput = document.getElementById('adminBonusWeek');
       if (bonusWeekInput && !bonusWeekInput.value) bonusWeekInput.value = data.weekNumber || 1;
+      const recapWeekInput = document.getElementById('adminRecapWeek');
+      if (recapWeekInput && !recapWeekInput.value) recapWeekInput.value = data.weekNumber || 1;
+      const recapTitleInput = document.getElementById('adminRecapTitle');
+      if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
       populateAdminSeasonPhase(data);
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
       populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
@@ -2516,6 +2579,68 @@ function adminSaveRecap() {
       title: document.getElementById('adminRecapTitle').value,
       body: getRichEditorHtml('adminRecapBody')
     });
+}
+
+function getAdminEmailWeek() {
+  return Number(document.getElementById('adminRecapWeek')?.value || document.getElementById('adminResultsWeek')?.value || (APP_DATA && APP_DATA.weekNumber) || 1);
+}
+
+function renderAdminEmailPreview(email) {
+  const preview = document.getElementById('adminEmailPreview');
+  const status = document.getElementById('adminEmailStatus');
+  if (!preview) return;
+  const recipients = (email.recipients || []).join(', ') || 'No Admin Email recipients configured';
+  preview.classList.remove('hidden');
+  preview.innerHTML = `
+    <div class="admin-email-meta">
+      <strong>Subject:</strong> ${escapeHtml(email.subject || '')}<br>
+      <strong>Recipients:</strong> ${escapeHtml(recipients)}
+    </div>
+    <iframe class="admin-email-frame" title="Player update email preview"></iframe>
+  `;
+  const frame = preview.querySelector('iframe');
+  if (frame) {
+    frame.srcdoc = email.htmlBody || `<pre>${escapeHtml(email.body || '')}</pre>`;
+  }
+  if (status) status.textContent = `Preview generated for Week ${email.week || getAdminEmailWeek()}.`;
+}
+
+function adminPreviewPlayerUpdateEmail() {
+  if (!ADMIN_PASSCODE) {
+    showModal('Admin Only', 'Unlock the Admin Tribe Council before generating the update email.');
+    return;
+  }
+  const status = document.getElementById('adminEmailStatus');
+  if (status) status.textContent = 'Building the weekly player update...';
+
+  google.script.run
+    .withSuccessHandler(email => renderAdminEmailPreview(email || {}))
+    .withFailureHandler(err => {
+      if (status) status.textContent = `Unable to generate preview: ${getErrorMessage(err)}`;
+      showModal('Council Error', getErrorMessage(err));
+    })
+    .adminGeneratePlayerUpdateEmail(ADMIN_PASSCODE, getAdminEmailWeek());
+}
+
+function adminSendPlayerUpdateEmail() {
+  if (!ADMIN_PASSCODE) {
+    showModal('Admin Only', 'Unlock the Admin Tribe Council before sending the update email.');
+    return;
+  }
+  const status = document.getElementById('adminEmailStatus');
+  if (status) status.textContent = 'Sending the weekly player update...';
+
+  google.script.run
+    .withSuccessHandler(r => {
+      if (r && r.email) renderAdminEmailPreview(r.email);
+      if (status) status.textContent = r.message || 'Player update email sent.';
+      showModal('Player Update Sent', r.message || 'Player update email sent.');
+    })
+    .withFailureHandler(err => {
+      if (status) status.textContent = `Unable to send email: ${getErrorMessage(err)}`;
+      showModal('Council Error', getErrorMessage(err));
+    })
+    .adminSendPlayerUpdateEmail(ADMIN_PASSCODE, getAdminEmailWeek());
 }
 
 function adminSaveContentBlocks() {
