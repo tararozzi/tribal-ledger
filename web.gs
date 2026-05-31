@@ -149,11 +149,102 @@ const SEASON_PHASES_51 = {
   }
 };
 
-function doGet() {
+function doGet(e) {
+  if (isJsonApiRequest_(e)) {
+    return handleJsonApiRequest_((e && e.parameter) || {});
+  }
+
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('The Tribal Ledger')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function doPost(e) {
+  let payload = {};
+  try {
+    payload = e && e.postData && e.postData.contents
+      ? JSON.parse(e.postData.contents)
+      : {};
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: 'Invalid JSON request body.' });
+  }
+  return handleJsonApiRequest_(payload);
+}
+
+function isJsonApiRequest_(e) {
+  const params = (e && e.parameter) || {};
+  return String(params.mode || '').toLowerCase() === 'json' || !!(params.functionName || params.action);
+}
+
+function handleJsonApiRequest_(payload) {
+  const functionName = String(payload.functionName || payload.action || '').trim();
+  const args = parseApiArgs_(payload.args);
+
+  try {
+    const api = getPublicApiMap_();
+    if (!api[functionName]) {
+      throw new Error(`Unknown API function: ${functionName}`);
+    }
+    return jsonResponse_({ ok: true, result: api[functionName].apply(null, args) });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: err && err.message ? err.message : String(err) });
+  }
+}
+
+function parseApiArgs_(args) {
+  if (Array.isArray(args)) return args;
+  if (!args) return [];
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (err) {
+      return [args];
+    }
+  }
+  return [args];
+}
+
+function jsonResponse_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getPublicApiMap_() {
+  return {
+    getAppData,
+    registerPlayer,
+    addRecapComment,
+    toggleReaction,
+    getInteractionState,
+    submitPicks,
+    getPlayerSubmission,
+    getAvailablePickWeeks,
+    getEliteWeekPicks,
+    getSeasonResponsesTable,
+    getBonusLog,
+    verifyAdminPasscode,
+    getAdminDashboard,
+    getAdminResultAnswerChoices,
+    adminSaveSeasonPhase,
+    getAdminQuestionWeek,
+    adminSetVotingOpen,
+    adminSaveRecap,
+    adminGeneratePlayerUpdateEmail,
+    adminSendPlayerUpdateEmail,
+    adminSaveContentBlocks,
+    adminSaveResults,
+    adminRecalculateScores,
+    adminAdvanceWeek,
+    adminAddBonus,
+    adminSaveCastawayBio,
+    adminSaveInteractionSettings,
+    adminDeleteComment,
+    adminPinComment,
+    uploadTribePhoto
+  };
 }
 
 function include(filename) {
