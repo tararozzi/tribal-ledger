@@ -156,6 +156,75 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/**
+ * JSON RPC endpoint used by the Vercel serverless proxy.
+ * Only functions explicitly listed here can be called over HTTP.
+ */
+function doPost(event) {
+  try {
+    const body = JSON.parse(String(event && event.postData && event.postData.contents || '{}'));
+    const functionName = String(body.functionName || '').trim();
+    const args = Array.isArray(body.args) ? body.args : [];
+    const handlers = getVercelRpcHandlers_();
+
+    if (!functionName || !Object.prototype.hasOwnProperty.call(handlers, functionName)) {
+      throw new Error('Unsupported Apps Script function.');
+    }
+    if (args.length > 10) {
+      throw new Error('Too many function arguments.');
+    }
+
+    const result = handlers[functionName].apply(null, args);
+    return jsonResponse51_({ ok: true, result: result === undefined ? null : result });
+  } catch (err) {
+    return jsonResponse51_({
+      ok: false,
+      error: err && err.message ? err.message : 'Apps Script request failed.'
+    });
+  }
+}
+
+function getVercelRpcHandlers_() {
+  return {
+    addRecapComment,
+    adminAddBonus,
+    adminAdvanceWeek,
+    adminDeleteComment,
+    adminGeneratePlayerUpdateEmail,
+    adminPinComment,
+    adminRecalculateScores,
+    adminSaveCastawayBio,
+    adminSaveContentBlocks,
+    adminSaveInteractionSettings,
+    adminSaveRecap,
+    adminSaveResults,
+    adminSaveSeasonPhase,
+    adminSendPlayerUpdateEmail,
+    adminSetVotingOpen,
+    getAdminDashboard,
+    getAdminQuestionWeek,
+    getAdminResultAnswerChoices,
+    getAppData,
+    getAvailablePickWeeks,
+    getBonusLog,
+    getEliteWeekPicks,
+    getInteractionState,
+    getPlayerSubmission,
+    getSeasonResponsesTable,
+    registerPlayer,
+    submitPicks,
+    toggleReaction,
+    uploadTribePhoto,
+    verifyAdminPasscode
+  };
+}
+
+function jsonResponse51_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
