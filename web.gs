@@ -149,102 +149,11 @@ const SEASON_PHASES_51 = {
   }
 };
 
-function doGet(e) {
-  if (isJsonApiRequest_(e)) {
-    return handleJsonApiRequest_((e && e.parameter) || {});
-  }
-
+function doGet() {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('The Tribal Ledger')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function doPost(e) {
-  let payload = {};
-  try {
-    payload = e && e.postData && e.postData.contents
-      ? JSON.parse(e.postData.contents)
-      : {};
-  } catch (err) {
-    return jsonResponse_({ ok: false, error: 'Invalid JSON request body.' });
-  }
-  return handleJsonApiRequest_(payload);
-}
-
-function isJsonApiRequest_(e) {
-  const params = (e && e.parameter) || {};
-  return String(params.mode || '').toLowerCase() === 'json' || !!(params.functionName || params.action);
-}
-
-function handleJsonApiRequest_(payload) {
-  const functionName = String(payload.functionName || payload.action || '').trim();
-  const args = parseApiArgs_(payload.args);
-
-  try {
-    const api = getPublicApiMap_();
-    if (!api[functionName]) {
-      throw new Error(`Unknown API function: ${functionName}`);
-    }
-    return jsonResponse_({ ok: true, result: api[functionName].apply(null, args) });
-  } catch (err) {
-    return jsonResponse_({ ok: false, error: err && err.message ? err.message : String(err) });
-  }
-}
-
-function parseApiArgs_(args) {
-  if (Array.isArray(args)) return args;
-  if (!args) return [];
-  if (typeof args === 'string') {
-    try {
-      const parsed = JSON.parse(args);
-      return Array.isArray(parsed) ? parsed : [parsed];
-    } catch (err) {
-      return [args];
-    }
-  }
-  return [args];
-}
-
-function jsonResponse_(payload) {
-  return ContentService
-    .createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function getPublicApiMap_() {
-  return {
-    getAppData,
-    registerPlayer,
-    addRecapComment,
-    toggleReaction,
-    getInteractionState,
-    submitPicks,
-    getPlayerSubmission,
-    getAvailablePickWeeks,
-    getEliteWeekPicks,
-    getSeasonResponsesTable,
-    getBonusLog,
-    verifyAdminPasscode,
-    getAdminDashboard,
-    getAdminResultAnswerChoices,
-    adminSaveSeasonPhase,
-    getAdminQuestionWeek,
-    adminSetVotingOpen,
-    adminSaveRecap,
-    adminGeneratePlayerUpdateEmail,
-    adminSendPlayerUpdateEmail,
-    adminSaveContentBlocks,
-    adminSaveResults,
-    adminRecalculateScores,
-    adminAdvanceWeek,
-    adminAddBonus,
-    adminSaveCastawayBio,
-    adminSaveInteractionSettings,
-    adminDeleteComment,
-    adminPinComment,
-    uploadTribePhoto
-  };
 }
 
 function include(filename) {
@@ -351,26 +260,31 @@ function registerPlayer(name, tribalKey) {
   if (!cleanName) throw new Error('Enter your castaway name.');
   if (!cleanKey) throw new Error('Enter your tribal key.');
 
-  const ss = SpreadsheetApp.getActive();
-  ensureSheetWithHeaders_(ss, APP_SHEETS_51.PLAYERS, GAME_HEADERS_51.PLAYERS);
-  const sheet = mustGetSheet_(ss, APP_SHEETS_51.PLAYERS);
-  const headers = getHeaders_(sheet);
-  const rows = readTable_(sheet);
-  const existingIndex = rows.findIndex(row => nameKey51_(row.Name) === nameKey51_(cleanName));
-  const record = {
-    Name: cleanName,
-    Active: 'TRUE',
-    TribalKey: cleanKey
-  };
-  const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActive();
+    ensureSheetWithHeaders_(ss, APP_SHEETS_51.PLAYERS, GAME_HEADERS_51.PLAYERS);
+    const sheet = mustGetSheet_(ss, APP_SHEETS_51.PLAYERS);
+    const headers = getHeaders_(sheet);
+    const rows = readTable_(sheet);
+    const existing = rows.some(row => nameKey51_(row.Name) === nameKey51_(cleanName));
 
-  if (existingIndex >= 0) {
-    sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
-    return { ok: true, name: cleanName, message: 'Your castaway registration has been updated.' };
+    if (existing) {
+      throw new Error('That castaway name is already registered. Ask the host to update your tribal key.');
+    }
+
+    const record = {
+      Name: cleanName,
+      Active: 'TRUE',
+      TribalKey: cleanKey
+    };
+    const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+    sheet.appendRow(values);
+    return { ok: true, name: cleanName, message: 'Your castaway registration has been added to the tribe roster.' };
+  } finally {
+    lock.releaseLock();
   }
-
-  sheet.appendRow(values);
-  return { ok: true, name: cleanName, message: 'Your castaway registration has been added to the tribe roster.' };
 }
 
 function getSeasonPhase_(config, currentWeek, finalWeek) {
@@ -727,7 +641,12 @@ function submitPicks(payload) {
     const ss = SpreadsheetApp.getActive();
     const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
     const timezone = String(config.Timezone || 'America/Los_Angeles');
-    const phase = getSeasonPhase_(config, Number(config.WeekNumber || 1), Number(config.FinalWeek || 0));
+    const currentWeek = Number(config.WeekNumber || 1);
+    const submittedWeek = Number(payload.week || 0);
+    if (submittedWeek !== currentWeek) {
+      throw new Error(`Picks can only be submitted for the current week (Week ${currentWeek}). Refresh the app and try again.`);
+    }
+    const phase = getSeasonPhase_(config, currentWeek, Number(config.FinalWeek || 0));
 
     if (phase.key === 'postfinale') {
       throw new Error('Voting is complete. Final results and season recaps are now live.');
@@ -2498,8 +2417,55 @@ function isEpisodeContentPublishedForWeek_(week, config, timezone) {
 }
 
 function sanitizeHtml_(html) {
-  return String(html || '')
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '');
+  const source = String(html || '');
+  const allowedTags = new Set([
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+    'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a'
+  ]);
+  const voidTags = new Set(['br']);
+
+  function escapeText_(value) {
+    return String(value || '')
+      .replace(/&(?!(?:amp|lt|gt|quot|apos|#39|#\d+|#x[0-9a-f]+);)/gi, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function safeHref_(tag) {
+    const match = String(tag || '').match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
+    const href = match ? String(match[1] || match[2] || match[3] || '').trim() : '';
+    if (!/^(https?:|mailto:)/i.test(href)) return '';
+    return href
+      .replace(/&(?!(?:amp|lt|gt|quot|apos|#39|#\d+|#x[0-9a-f]+);)/gi, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  let output = '';
+  let cursor = 0;
+  const tagPattern = /<[^>]*>/g;
+  let match;
+  while ((match = tagPattern.exec(source)) !== null) {
+    output += escapeText_(source.slice(cursor, match.index));
+    const rawTag = match[0];
+    const nameMatch = rawTag.match(/^<\s*(\/?)\s*([a-z0-9]+)/i);
+    if (nameMatch) {
+      const closing = !!nameMatch[1];
+      const tagName = nameMatch[2].toLowerCase();
+      if (allowedTags.has(tagName)) {
+        if (closing) {
+          if (!voidTags.has(tagName)) output += `</${tagName}>`;
+        } else if (tagName === 'a') {
+          const href = safeHref_(rawTag);
+          output += href ? `<a href="${href}" target="_blank" rel="noopener noreferrer">` : '<a>';
+        } else {
+          output += `<${tagName}>`;
+        }
+      }
+    }
+    cursor = tagPattern.lastIndex;
+  }
+  output += escapeText_(source.slice(cursor));
+  return output;
 }
