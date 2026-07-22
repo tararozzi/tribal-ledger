@@ -499,7 +499,6 @@ function autoFillMissingPicks() {
     const existingKeys = new Set(existing.map(r => nameKey51_(r.Name)));
 
     const createdFor = [];
-    const usedAutoComments = new Set();
 
     players.forEach(player => {
       const key = nameKey51_(player.Name);
@@ -510,9 +509,8 @@ function autoFillMissingPicks() {
         name: String(player.Name || '').trim(),
         email: String(player.Email || '').trim(),
         commentLabel: String(questionConfig.CommentPromptTemplate || 'Campfire thoughts'),
-        commentText: generateAutoFreeTextResponse_(questionConfig.CommentPromptTemplate, player, week, usedAutoComments)
+        commentText: generateAutoFreeTextResponse_(questionConfig.CommentPromptTemplate, player, week)
       };
-      usedAutoComments.add(payload.commentText);
 
       questionDefs.forEach(q => {
         if (q.type === 'text') return;
@@ -645,7 +643,9 @@ function adminRecalculateScores(passcode) {
   return recalculateScores();
 }
 
-function adminRecalculateScoresTrialRun() {
+// Private diagnostic helper. The trailing underscore prevents invocation through
+// google.script.run while keeping it available from the Apps Script editor.
+function adminRecalculateScoresTrialRun_() {
   return recalculateScores();
 }
 
@@ -654,7 +654,8 @@ function adminAdvanceWeek(passcode) {
   return advanceWeek_();
 }
 
-function adminAdvanceWeekTrialRun() {
+// Private diagnostic helper; advancing the week must not be a public RPC.
+function adminAdvanceWeekTrialRun_() {
   return advanceWeek_();
 }
 
@@ -850,7 +851,7 @@ function pickRandom_(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function generateAutoFreeTextResponse_(prompt, player, week, usedResponses) {
+function generateAutoFreeTextResponse_(prompt, player, week) {
   const plainPrompt = String(prompt || '')
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
@@ -879,14 +880,22 @@ function generateAutoFreeTextResponse_(prompt, player, week, usedResponses) {
   const personalized = [
     `${playerName || 'This castaway'} missed Tribal${weekTag} and is blaming the jungle calendar.`,
     `${playerName || 'This castaway'} was last seen whispering "I have the numbers" to a coconut.`,
-    `${playerName || 'This castaway'} tried to play an expired parchment as an advantage.`
+    `${playerName || 'This castaway'} tried to play an expired parchment as an advantage.`,
+    `${playerName || 'This castaway'} was too busy searching for a hidden immunity idol to answer this question.`,
+    `${playerName || 'This castaway'} had their torch snuffed by Jeff before they could finish typing.`,
+    `${playerName || 'This castaway'} felt that camp life got too rough and missed Tribal again.`,
+    `${playerName || 'This castaway'} got lost on the way back from the reward challenge.`,
+    `${playerName || 'This castaway'} trusted their alliance to remind them… rookie mistake.`,
+    `${playerName || 'This castaway'} played their Shot in the Dark and lost track of time.`,
+    `${playerName || 'This castaway'} wandered off looking for advantages and forgot to vote.`,
+    `${playerName || 'This castaway'} accidentally formed an alliance with the wrong time zone.`,
+    `${playerName || 'This castaway'} was practicing fire-making instead of answering questions.`,
+    `${playerName || 'This castaway'} got blindsided by the deadline.`,
+    `${playerName || 'This castaway'} was rationing rice and forgot to submit their picks.`,
+    `${playerName || 'This castaway'}'s alliance told them that the deadline was tomorrow….`
   ];
 
-  const pool = [].concat(topicPool, SURVIVOR_THEMED_AUTO_COMMENTS, personalized);
-  const unused = pool.filter(response => !usedResponses || !usedResponses.has(response));
-  if (unused.length) return pickRandom_(unused);
-  const fallback = pickRandom_(pool);
-  return week ? `${fallback} Week ${week} edition.` : fallback;
+  return pickRandom_([].concat(topicPool, SURVIVOR_THEMED_AUTO_COMMENTS, personalized));
 }
 
 function normalizeAnswer51_(value) {
