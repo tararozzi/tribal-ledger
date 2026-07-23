@@ -922,6 +922,9 @@ function getPlayerSubmission(name, week, tribalKey) {
   const reveal = getRevealStatus_(config, String(config.Timezone || 'America/Los_Angeles'));
   const canShowCorrect = safeWeek < currentWeek || reveal.isVisible;
   const correct = buildCorrectMap_(scoringRow);
+  const weekScoreRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.SCORES))
+    .filter(row => Number(row.Week || 0) === safeWeek && nameKey51_(row.Name) === key);
+  const weekScore = weekScoreRows.length ? weekScoreRows[weekScoreRows.length - 1] : null;
 
   function buildSubmissionQuestion_(index) {
     const key = `q${index}`;
@@ -939,6 +942,7 @@ function getPlayerSubmission(name, week, tribalKey) {
   return {
     name: String(latest.Name || ''),
     email: String(latest.Email || ''),
+    weekPoints: weekScore ? Number(weekScore.WeekPoints || 0) : null,
     questions: [
       buildSubmissionQuestion_(1),
       buildSubmissionQuestion_(2),
@@ -1895,6 +1899,7 @@ function getSeasonResponsesTable() {
 
   const leaderboard = getLeaderboardData_();
   const rankByName = new Map((leaderboard.rows || []).map(row => [nameKey51_(row.name), Number(row.rank || 0)]));
+  const totalByName = new Map((leaderboard.rows || []).map(row => [nameKey51_(row.name), Number(row.total || 0)]));
 
   const playerNames = Array.from(new Set(visiblePicks.map(r => String(r.Name || '').trim()).filter(Boolean)))
     .sort((a, b) => {
@@ -1925,6 +1930,7 @@ function getSeasonResponsesTable() {
     return {
       rank: rankByName.get(nameKey51_(name)) || '',
       name,
+      total: totalByName.get(nameKey51_(name)) || 0,
       cells
     };
   });

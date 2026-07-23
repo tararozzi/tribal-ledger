@@ -3139,8 +3139,8 @@ tbody tr:hover td {
 
 .season-ledger-table .season-player-rank {
   left: 0;
-  min-width: 210px;
-  max-width: 260px;
+  min-width: 260px;
+  max-width: 330px;
 }
 
 .season-ledger-table thead .season-player-rank {
@@ -3296,7 +3296,16 @@ tbody tr:hover td {
 .season-player-card {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
+  width: 100%;
+}
+
+.season-player-total {
+  margin-left: auto;
+  color: #7b4b16;
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .ledger-pick-cell {
@@ -5236,6 +5245,9 @@ function loadMySubmission() {
           <div class="my-picks-summary">
             <span>Tribal key verified</span>
             <span>${escapeHtml(String((data.questions || []).length))} picks loaded</span>
+            ${data.weekPoints !== null && data.weekPoints !== undefined
+              ? `<span>${escapeHtml(String(data.weekPoints))} pts earned in Week ${escapeHtml(String(week))}</span>`
+              : '<span>Week points not scored yet</span>'}
           </div>
           <div class="my-picks-grid">
             ${questionRows}
@@ -5485,6 +5497,7 @@ function loadSeasonResponsesTable() {
               <div class="season-player-card">
                 <span class="rank-prefix">${formatOrdinalRank(row.rank)}</span>
                 <strong>${escapeHtml(row.name || '')}</strong>
+                <span class="season-player-total">${escapeHtml(String(row.total || 0))} pts</span>
               </div>
             </td>
             ${(row.cells || []).map(cell => `
