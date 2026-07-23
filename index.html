@@ -5047,7 +5047,10 @@ function normalizePlayerNameKey_(value) {
 function isExistingRosterName_(name) {
   const key = normalizePlayerNameKey_(name);
   if (!key || !APP_DATA) return false;
-  return (APP_DATA.rosterNames || []).some(rosterName => normalizePlayerNameKey_(rosterName) === key);
+  const rosterNames = (APP_DATA.rosterNames && APP_DATA.rosterNames.length)
+    ? APP_DATA.rosterNames
+    : (APP_DATA.players || []).map(player => player && player.name).filter(Boolean);
+  return rosterNames.some(rosterName => normalizePlayerNameKey_(rosterName) === key);
 }
 
 function syncRegistrationState() {
