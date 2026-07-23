@@ -3139,6 +3139,27 @@ tbody tr:hover td {
   z-index: 40;
 }
 
+.entry-fee-acknowledgment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(240, 184, 77, 0.14);
+  color: #3a291b;
+  font-weight: 800;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.entry-fee-acknowledgment input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
 .ledger-player-header-title,
 .ledger-player-header-subtitle {
   display: block;

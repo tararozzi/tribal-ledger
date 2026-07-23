@@ -326,11 +326,14 @@ function getInteractionConfig_(config) {
   };
 }
 
-function registerPlayer(name, tribalKey) {
+function registerPlayer(name, tribalKey, entryFeeAcknowledged) {
   const cleanName = String(name || '').trim();
   const cleanKey = String(tribalKey || '').trim();
   if (!cleanName) throw new Error('Enter your castaway name.');
   if (!cleanKey) throw new Error('Enter your tribal key.');
+  if (entryFeeAcknowledged !== true) {
+    throw new Error('You must acknowledge the $20 season entry fee before registering.');
+  }
 
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);

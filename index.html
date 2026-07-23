@@ -3145,6 +3145,27 @@ tbody tr:hover td {
   z-index: 40;
 }
 
+.entry-fee-acknowledgment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(240, 184, 77, 0.14);
+  color: #3a291b;
+  font-weight: 800;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.entry-fee-acknowledgment input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
 .ledger-player-header-title,
 .ledger-player-header-subtitle {
   display: block;
@@ -3470,7 +3491,7 @@ tbody tr:hover td {
           <h2 class="section-title" id="votingBoardTitle">Survivor Voting Board</h2>
           <div id="phaseVotingReminder" class="phase-voting-reminder"></div>
 
-          <div class="register-castaway-box">
+          <div id="registerCastawayBox" class="register-castaway-box">
             <h3 class="section-title mini">Register Castaway</h3>
             <div class="admin-grid compact-admin-grid">
               <div>
@@ -3485,6 +3506,10 @@ tbody tr:hover td {
                 <button id="registerCastawayBtn" class="btn btn-secondary" type="button" onclick="registerCastaway()">Register</button>
               </div>
             </div>
+            <label class="entry-fee-acknowledgment" for="registerEntryFeeAck">
+              <input id="registerEntryFeeAck" type="checkbox">
+              <span>I acknowledge that I will pay the $20 entry fee to join the tribe this season.</span>
+            </label>
             <div id="registerCastawayStatus" class="tiny-note"></div>
           </div>
 
@@ -4506,6 +4531,12 @@ function renderApp(data) {
     submitBtn.textContent = phaseMessages.submitLabel || 'Submit Parchment';
     submitBtn.disabled = phase.key === 'postfinale';
   }
+  const registerBox = document.getElementById('registerCastawayBox');
+  if (registerBox) {
+    const registrationClosed = Number(data.weekNumber || 0) > 1 ||
+      (Number(data.weekNumber || 0) === 1 && !data.voting.isOpen);
+    registerBox.classList.toggle('hidden', registrationClosed);
+  }
 
   document.getElementById('campAnnouncementsTitle').innerHTML = data.contentBlocks.campAnnouncementsTitle || 'Camp Announcements';
   const rulesTitle = normalizeCampRulesTitle_(data.contentBlocks.atAGlanceTitle);
@@ -5102,6 +5133,7 @@ function registerCastaway() {
   const status = document.getElementById('registerCastawayStatus');
   const name = nameInput.value.trim();
   const tribalKey = keyInput.value.trim();
+  const entryFeeAcknowledged = document.getElementById('registerEntryFeeAck').checked;
 
   if (isExistingRosterName_(name)) {
     syncRegistrationState();
@@ -5111,6 +5143,11 @@ function registerCastaway() {
 
   if (!name || !tribalKey) {
     showModal('Missing Registration', 'Enter your castaway name and tribal key.');
+    return;
+  }
+
+  if (!entryFeeAcknowledged) {
+    showModal('Entry Fee Acknowledgment Required', 'Please acknowledge that you will pay the $20 entry fee to join the tribe this season.');
     return;
   }
 
@@ -5130,7 +5167,7 @@ function registerCastaway() {
       if (status) status.textContent = `Registration failed: ${getErrorMessage(err)}`;
       showModal('Registration Error', getErrorMessage(err));
     })
-    .registerPlayer(name, tribalKey);
+    .registerPlayer(name, tribalKey, entryFeeAcknowledged);
 }
 
 function handleSubmit(event) {
