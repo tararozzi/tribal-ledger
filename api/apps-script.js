@@ -1,6 +1,6 @@
 const APPS_SCRIPT_EXEC_URL =
   process.env.APPS_SCRIPT_EXEC_URL ||
-  'https://script.google.com/macros/s/AKfycbwXgdouIYuy878sW3dcqGOyTIhBVdoKI-ICo-jCq0tjP_kv10A6XsjS9s8zLuasDmtn/exec';
+  'https://script.google.com/macros/s/AKfycbwpfuTz7XgO2j2LQ2emwSbEjyl-g4MvsrLkhjpMDF5GB_budrqUCr32Zr37AXJiZKSk/exec';
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
