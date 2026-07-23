@@ -195,6 +195,7 @@ function getVercelRpcHandlers_() {
     adminRecalculateScores,
     adminSaveCastawayBio,
     adminSaveContentBlocks,
+    adminSaveVotingSchedule,
     adminSaveInteractionSettings,
     adminSaveRecap,
     adminSaveResults,
@@ -258,6 +259,7 @@ function getAppData() {
 
   return {
     seasonName: String(config.SeasonName || 'Survivor Season 51'),
+    entryFeeAmount: normalizeEntryFeeAmount_(config.EntryFeeAmount),
     ledgerTitle: String(config.TribeLedgerTitle || 'The Tribal Ledger'),
     ledgerSubtitle: String(config.TribeLedgerSubtitle || 'Outwit • Outplay • Outlast • Outscore'),
     weekNumber: currentWeek,
@@ -332,7 +334,7 @@ function registerPlayer(name, tribalKey, entryFeeAcknowledged) {
   if (!cleanName) throw new Error('Enter your castaway name.');
   if (!cleanKey) throw new Error('Enter your tribal key.');
   if (entryFeeAcknowledged !== true) {
-    throw new Error('You must acknowledge the $20 season entry fee before registering.');
+    throw new Error('You must acknowledge the season entry fee before registering.');
   }
 
   const lock = LockService.getDocumentLock();
@@ -1010,6 +1012,10 @@ function getAdminDashboard(passcode) {
     votingStatus: voting.statusText,
     deadlineLabel: voting.deadlineLabel,
     revealLabel: reveal.revealLabel,
+    closeDay: String(config.CloseDay || ''),
+    closeTime: formatTimeForInput_(config.CloseTime),
+    revealDay: String(config.RevealDay || config.EpisodeDay || ''),
+    revealTime: formatTimeForInput_(config.RevealTime || config.EpisodeTime),
     submissionsCount: getSubmissionCountForWeek_(weekNumber),
     latestRecapTitle: recap.title || '',
     scoresSummary: getScoresSummary_(),
@@ -1088,6 +1094,24 @@ function adminSetVotingOpen(passcode, isOpen) {
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'VotingOpen', isOpen ? 'TRUE' : 'FALSE');
   return { ok: true, message: isOpen ? 'Voting is now OPEN.' : 'Voting is now CLOSED.' };
+}
+
+function adminSaveVotingSchedule(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const closeDay = String((payload && payload.closeDay) || '').trim();
+  const closeTime = String((payload && payload.closeTime) || '').trim();
+  const revealDay = String((payload && payload.revealDay) || '').trim();
+  const revealTime = String((payload && payload.revealTime) || '').trim();
+  parseRule_(closeDay, closeTime);
+  parseRule_(revealDay, revealTime);
+
+  const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
+  setConfigValue_(configSheet, 'CloseDay', closeDay);
+  setConfigValue_(configSheet, 'CloseTime', formatTimeForConfig_(closeTime));
+  setConfigValue_(configSheet, 'RevealDay', revealDay);
+  setConfigValue_(configSheet, 'RevealTime', formatTimeForConfig_(revealTime));
+  SpreadsheetApp.flush();
+  return { ok: true, message: 'Voting deadline and picks reveal schedule saved to Config.' };
 }
 
 function adminSaveRecap(passcode, payload) {
@@ -1460,6 +1484,7 @@ function getAdminContentBlocks(passcode, questionWeek) {
     q8Type: normalizeQuestionType_(questionConfig.Q8Type),
     q8Options: String(questionConfig.Q8Options || ''),
     commentPromptTemplate: sanitizeHtml_(String(questionConfig.CommentPromptTemplate || 'Campfire Thoughts')),
+    entryFeeAmount: normalizeEntryFeeAmount_(config.EntryFeeAmount),
     campAnnouncementsTitle: sanitizeHtml_(String(config.CampAnnouncementsTitle || 'Camp Announcements')),
     campAnnouncement1: sanitizeHtml_(String(config.CampAnnouncement1 || '')),
     campAnnouncement2: sanitizeHtml_(String(config.CampAnnouncement2 || '')),
@@ -1554,6 +1579,7 @@ function adminSaveContentBlocks(passcode, payload) {
   const currentWeek = Number(config.WeekNumber || 1);
   const questionWeek = Number(payload.questionWeek || payload.week || currentWeek);
   if (!questionWeek) throw new Error('Choose a valid week number.');
+  const entryFeeAmount = normalizeEntryFeeAmount_(payload.entryFeeAmount);
 
   const questionConfig = {
     Q1: cleanQuestionPrompt_(payload.q1),
@@ -1598,6 +1624,7 @@ function adminSaveContentBlocks(passcode, payload) {
   }
 
   setConfigValue_(configSheet, 'CampAnnouncementsTitle', sanitizeHtml_(String(payload.campAnnouncementsTitle || '').trim()));
+  setConfigValue_(configSheet, 'EntryFeeAmount', entryFeeAmount);
   setConfigValue_(configSheet, 'CampAnnouncement1', sanitizeHtml_(String(payload.campAnnouncement1 || '').trim()));
   setConfigValue_(configSheet, 'CampAnnouncement2', sanitizeHtml_(String(payload.campAnnouncement2 || '').trim()));
   setConfigValue_(configSheet, 'CampAnnouncement3', sanitizeHtml_(String(payload.campAnnouncement3 || '').trim()));
@@ -2295,8 +2322,8 @@ function getVotingStatus_(config, timezone) {
 
 function getRevealStatus_(config, timezone) {
   const now = new Date();
-  const publishDay = config.EpisodeDay || config.RevealDay;
-  const publishTime = config.EpisodeTime || config.RevealTime;
+  const publishDay = config.RevealDay || config.EpisodeDay;
+  const publishTime = config.RevealTime || config.EpisodeTime;
   const rule = parseRule_(publishDay, publishTime);
   const nowDay = Number(Utilities.formatDate(now, timezone, 'u'));
   const nowMinutes =
@@ -2332,6 +2359,30 @@ function buildRuleLabel_(day, time) {
   const safeDay = String(day || '').trim();
   const safeTime = String(time || '').trim();
   return safeDay && safeTime ? `${safeDay} ${safeTime}` : 'Not set';
+}
+
+function formatTimeForInput_(value) {
+  const totalMinutes = parseTimeToMinutes_(value);
+  if (totalMinutes == null) return '';
+  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+  const minutes = String(totalMinutes % 60).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function formatTimeForConfig_(value) {
+  const totalMinutes = parseTimeToMinutes_(value);
+  if (totalMinutes == null) throw new Error('Enter a valid time.');
+  const hour24 = Math.floor(totalMinutes / 60);
+  const minutes = String(totalMinutes % 60).padStart(2, '0');
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  return `${hour24 % 12 || 12}:${minutes} ${suffix}`;
+}
+
+function normalizeEntryFeeAmount_(value) {
+  const raw = String(value == null || value === '' ? '20' : value).replace(/[$,]/g, '').trim();
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('Entry fee amount must be zero or greater.');
+  return amount % 1 === 0 ? String(amount) : amount.toFixed(2);
 }
 
 function computeUpcomingOrCurrentIso_(now, timezone, dayNum, totalMinutes, forwardOnly) {

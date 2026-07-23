@@ -3508,7 +3508,7 @@ tbody tr:hover td {
             </div>
             <label class="entry-fee-acknowledgment" for="registerEntryFeeAck">
               <input id="registerEntryFeeAck" type="checkbox">
-              <span>I acknowledge that I will pay the $20 entry fee to join the tribe this season.</span>
+              <span id="entryFeeAcknowledgmentText">I acknowledge that I will pay the $20 entry fee to join the tribe this season.</span>
             </label>
             <div id="registerCastawayStatus" class="tiny-note"></div>
           </div>
@@ -3640,7 +3640,30 @@ tbody tr:hover td {
             <!-- Voting Controls -->
             <div id="adminVotingControls" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Voting Controls</h3>
+              <div class="admin-grid compact-admin-grid">
+                <div>
+                  <label class="admin-label" for="adminCloseDay">Voting Deadline Day</label>
+                  <select id="adminCloseDay" class="text-input">
+                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminCloseTime">Voting Deadline Time</label>
+                  <input id="adminCloseTime" class="text-input" type="time">
+                </div>
+                <div>
+                  <label class="admin-label" for="adminRevealDay">Picks Reveal Day</label>
+                  <select id="adminRevealDay" class="text-input">
+                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminRevealTime">Picks Reveal Time</label>
+                  <input id="adminRevealTime" class="text-input" type="time">
+                </div>
+              </div>
               <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSaveVotingSchedule()">Save Schedule</button>
                 <button class="btn btn-primary" type="button" onclick="adminSetVoting(true)">Open Voting</button>
                 <button class="btn btn-danger" type="button" onclick="adminSetVoting(false)">Close Voting</button>
                 <button class="btn btn-secondary" type="button" onclick="loadAdminDashboard()">Refresh Council Status</button>
@@ -3886,6 +3909,12 @@ tbody tr:hover td {
             <!-- Camp Home Content -->
             <div id="adminCampContentSection" class="card inner-card camp-content-admin-card admin-scroll-target">
               <h3 class="section-title mini">Camp Home Content</h3>
+              <div class="admin-grid compact-admin-grid">
+                <div>
+                  <label class="admin-label" for="adminEntryFeeAmount">Entry Fee Amount ($)</label>
+                  <input id="adminEntryFeeAmount" class="text-input" type="number" min="0" step="0.01">
+                </div>
+              </div>
 
               <div class="admin-two-col">
                 <div>
@@ -4518,6 +4547,8 @@ function renderApp(data) {
   document.getElementById('weekDisplay').textContent = `Week ${data.weekNumber}`;
   document.getElementById('deadlineText').textContent = data.voting.deadlineLabel || 'Deadline not set';
   document.getElementById('episodeLabel').textContent = data.episode.label || 'Wednesday 8:00 PM';
+  const entryFeeText = document.getElementById('entryFeeAcknowledgmentText');
+  if (entryFeeText) entryFeeText.textContent = `I acknowledge that I will pay the $${data.entryFeeAmount || '20'} entry fee to join the tribe this season.`;
   const deadlineLabel = document.querySelector('.countdown-label');
   if (deadlineLabel) deadlineLabel.textContent = phase.key === 'postfinale' ? 'Season status' : (phase.key === 'finale' ? 'Final vote closes' : 'Voting closes');
 
@@ -5147,7 +5178,7 @@ function registerCastaway() {
   }
 
   if (!entryFeeAcknowledged) {
-    showModal('Entry Fee Acknowledgment Required', 'Please acknowledge that you will pay the $20 entry fee to join the tribe this season.');
+    showModal('Entry Fee Acknowledgment Required', `Please acknowledge that you will pay the $${(APP_DATA && APP_DATA.entryFeeAmount) || '20'} entry fee to join the tribe this season.`);
     return;
   }
 
@@ -5678,6 +5709,7 @@ function loadAdminDashboard() {
       const recapTitleInput = document.getElementById('adminRecapTitle');
       if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
       populateAdminSeasonPhase(data);
+      populateAdminVotingSchedule(data);
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
       populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
       populateAdminInteractionControls(data.interactions || {}, data.comments || []);
@@ -5927,6 +5959,7 @@ function populateAdminQuestionFields(blocks) {
 }
 
 function populateAdminCampContentFields(blocks) {
+  document.getElementById('adminEntryFeeAmount').value = blocks.entryFeeAmount || '20';
   setRichEditorHtml('adminCampAnnouncementsTitle', blocks.campAnnouncementsTitle || '');
   setRichEditorHtml('adminCampAnnouncement1', blocks.campAnnouncement1 || '');
   setRichEditorHtml('adminCampAnnouncement2', blocks.campAnnouncement2 || '');
@@ -6074,6 +6107,7 @@ function adminSaveContentBlocks() {
     .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
     .adminSaveContentBlocks(ADMIN_PASSCODE, {
       questionWeek: document.getElementById('adminQuestionWeek').value,
+      entryFeeAmount: document.getElementById('adminEntryFeeAmount').value,
       q1: getRichEditorHtml('adminQ1'),
       q2: getRichEditorHtml('adminQ2'),
       q3: getRichEditorHtml('adminQ3'),
@@ -6371,6 +6405,29 @@ function startCountdown(targetId, iso, endedText) {
 
   tick();
   COUNTDOWN_TIMERS[targetId] = setInterval(tick, 1000);
+}
+
+function adminSaveVotingSchedule() {
+  google.script.run
+    .withSuccessHandler(r => {
+      showModal('Schedule Updated', r.message || 'Voting schedule updated.');
+      loadAdminDashboard();
+      loadAppData();
+    })
+    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .adminSaveVotingSchedule(ADMIN_PASSCODE, {
+      closeDay: document.getElementById('adminCloseDay').value,
+      closeTime: document.getElementById('adminCloseTime').value,
+      revealDay: document.getElementById('adminRevealDay').value,
+      revealTime: document.getElementById('adminRevealTime').value
+    });
+}
+
+function populateAdminVotingSchedule(data) {
+  document.getElementById('adminCloseDay').value = data.closeDay || 'Wednesday';
+  document.getElementById('adminCloseTime').value = data.closeTime || '';
+  document.getElementById('adminRevealDay').value = data.revealDay || 'Wednesday';
+  document.getElementById('adminRevealTime').value = data.revealTime || '';
 }
 
 function stopCountdown(targetId, text) {

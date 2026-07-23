@@ -174,6 +174,7 @@ function seedAppConfigIfMissing_() {
     CloseTime: '9:00 AM',
     RevealDay: 'Wednesday',
     RevealTime: '8:00 PM',
+    EntryFeeAmount: '20',
     EpisodeDay: 'Wednesday',
     EpisodeTime: '8:00 PM',
     AdminPasscode: '',
