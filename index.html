@@ -4287,6 +4287,7 @@ let PHOTO_MIME_TYPE = '';
 let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
+const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
 const FALLBACK_REACTION_TYPES = [
@@ -4511,7 +4512,10 @@ function renderApp(data) {
   populateAdminBonusPlayers(data.players || []);
   if (phase.key === 'postfinale') {
     document.getElementById('deadlineText').textContent = 'Final results posted';
-    document.getElementById('deadlineLive').textContent = 'Season complete';
+    stopCountdown('deadlineLive', 'Season complete');
+  } else if (!data.voting.isOpen) {
+    document.getElementById('deadlineText').textContent = '';
+    stopCountdown('deadlineLive', 'Voting is closed.');
   } else {
     startCountdown('deadlineLive', data.voting.deadlineIso, phase.key === 'finale' ? 'Final vote locked' : 'Voting closed');
   }
@@ -6286,6 +6290,7 @@ function setRichEditorHtml(id, html) {
 function startCountdown(targetId, iso, endedText) {
   const el = document.getElementById(targetId);
   if (!el) return;
+  stopCountdown(targetId, '');
   if (!iso) {
     el.textContent = '--';
     return;
@@ -6315,7 +6320,16 @@ function startCountdown(targetId, iso, endedText) {
   }
 
   tick();
-  setInterval(tick, 1000);
+  COUNTDOWN_TIMERS[targetId] = setInterval(tick, 1000);
+}
+
+function stopCountdown(targetId, text) {
+  if (COUNTDOWN_TIMERS[targetId]) {
+    clearInterval(COUNTDOWN_TIMERS[targetId]);
+    delete COUNTDOWN_TIMERS[targetId];
+  }
+  const el = document.getElementById(targetId);
+  if (el && text !== undefined) el.textContent = text;
 }
 
 function initDropZone() {
