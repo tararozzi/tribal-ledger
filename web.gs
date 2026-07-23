@@ -308,7 +308,10 @@ function getAppData() {
       .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE')
       .map(p => ({
         name: String(p.Name || '').trim()
-      }))
+      })),
+    rosterNames: playerRows
+      .map(p => String(p.Name || '').trim())
+      .filter(Boolean)
   };
 }
 
@@ -340,7 +343,7 @@ function registerPlayer(name, tribalKey) {
     const existing = rows.some(row => nameKey51_(row.Name) === nameKey51_(cleanName));
 
     if (existing) {
-      throw new Error('That castaway name is already registered. Ask the host to update your tribal key.');
+      throw new Error('That castaway name is already registered. Use the Tribal Key already assigned to that player to submit picks; the stored key cannot be replaced here.');
     }
 
     const record = {
@@ -1068,6 +1071,7 @@ function adminSaveSeasonPhase(passcode, payload) {
   setConfigValue_(configSheet, 'SeasonPhaseManual', manualPhase);
   if (Number.isFinite(mergeWeek) && mergeWeek > 0) setConfigValue_(configSheet, 'MergeWeek', mergeWeek);
   if (Number.isFinite(finalWeek) && finalWeek > 0) setConfigValue_(configSheet, 'FinalWeek', finalWeek);
+  SpreadsheetApp.flush();
 
   return { ok: true, message: mode === 'MANUAL' ? 'Season phase override saved.' : 'Season phase automation saved.' };
 }
