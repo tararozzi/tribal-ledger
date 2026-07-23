@@ -2059,8 +2059,9 @@ tbody tr:hover td {
 
 .reaction-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
   margin: 12px 0 4px;
   padding: 8px;
   border: 1px solid rgba(143, 101, 64, 0.34);
@@ -2073,6 +2074,7 @@ tbody tr:hover td {
 .reaction-btn {
   appearance: none;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   min-height: 34px;
@@ -2103,10 +2105,6 @@ tbody tr:hover td {
 .reaction-emoji {
   font-size: 1rem;
   line-height: 1;
-}
-
-.reaction-label {
-  font-size: 0.82rem;
 }
 
 .reaction-count {
@@ -2849,7 +2847,7 @@ tbody tr:hover td {
   }
 
   .reaction-btn {
-    flex: 1 1 calc(50% - 6px);
+    flex: 0 0 auto;
     justify-content: center;
   }
 
@@ -3145,6 +3143,19 @@ tbody tr:hover td {
 
 .season-ledger-table thead .season-player-rank {
   z-index: 40;
+}
+
+.ledger-player-header-title,
+.ledger-player-header-subtitle {
+  display: block;
+}
+
+.ledger-player-header-subtitle {
+  margin-top: 4px;
+  color: rgba(255, 247, 223, 0.78);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .season-ledger-table .rank-prefix {
@@ -4777,9 +4788,8 @@ function commentsAreEnabled() {
 function renderReactionBar(targetId, counts, targetType, week) {
   if (!reactionsAreEnabled() || !targetId) return '';
   const buttons = getReactionTypes().map(reaction => `
-    <button class="reaction-btn" type="button" data-reaction="${escapeAttr(reaction.key)}" onclick="toggleReactionButton(this)">
+    <button class="reaction-btn" type="button" data-reaction="${escapeAttr(reaction.key)}" title="${escapeAttr(reaction.label)}" aria-label="${escapeAttr(reaction.label)}" onclick="toggleReactionButton(this)">
       <span class="reaction-emoji">${reaction.emoji}</span>
-      <span class="reaction-label">${escapeHtml(reaction.label)}</span>
       <span class="reaction-count">${escapeHtml(String((counts && counts[reaction.key]) || 0))}</span>
     </button>
   `).join('');
@@ -5484,7 +5494,10 @@ function loadSeasonResponsesTable() {
           <table class="elite-picks-table season-ledger-table">
             <thead>
               <tr>
-                <th rowspan="2" class="sticky-player season-player-rank ledger-player-header">Player</th>
+                <th rowspan="2" class="sticky-player season-player-rank ledger-player-header">
+                  <span class="ledger-player-header-title">Player</span>
+                  <span class="ledger-player-header-subtitle">Rank and Total Points</span>
+                </th>
                 ${weekHeader}
               </tr>
               <tr>
