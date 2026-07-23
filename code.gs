@@ -821,13 +821,14 @@ function getHeaders_(sheet) {
 
 function setConfigValue_(sheet, key, value) {
   const values = sheet.getDataRange().getValues();
+  let updated = false;
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][0] || '').trim() === key) {
       sheet.getRange(i + 1, 2).setValue(value);
-      return;
+      updated = true;
     }
   }
-  sheet.appendRow([key, value]);
+  if (!updated) sheet.appendRow([key, value]);
 }
 
 function removeConfigKey_(sheet, key) {
