@@ -3455,14 +3455,14 @@ tbody tr:hover td {
             <div class="admin-grid compact-admin-grid">
               <div>
                 <label class="admin-label" for="registerPlayerName">Castaway Name</label>
-                <input id="registerPlayerName" class="text-input" placeholder="Enter your castaway name">
+                <input id="registerPlayerName" class="text-input" placeholder="Enter your castaway name" oninput="syncRegistrationState()">
               </div>
               <div>
                 <label class="admin-label" for="registerTribalKey">Tribal Key</label>
-                <input id="registerTribalKey" class="text-input" type="password" autocomplete="new-password" placeholder="Create or enter your tribal key">
+                <input id="registerTribalKey" class="text-input" type="password" autocomplete="new-password" placeholder="Create a tribal key for a new player">
               </div>
               <div class="admin-action-cell">
-                <button class="btn btn-secondary" type="button" onclick="registerCastaway()">Register</button>
+                <button id="registerCastawayBtn" class="btn btn-secondary" type="button" onclick="registerCastaway()">Register</button>
               </div>
             </div>
             <div id="registerCastawayStatus" class="tiny-note"></div>
@@ -4517,6 +4517,7 @@ function renderApp(data) {
     if (registerName) registerName.value = savedName;
   }
   document.getElementById('myGameWeek').value = data.weekNumber;
+  syncRegistrationState();
 }
 
 function renderSeasonPhaseBanner(phase) {
@@ -5039,12 +5040,48 @@ function getSelectedValue(name) {
   return checked ? checked.value : '';
 }
 
+function normalizePlayerNameKey_(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isExistingRosterName_(name) {
+  const key = normalizePlayerNameKey_(name);
+  if (!key || !APP_DATA) return false;
+  return (APP_DATA.rosterNames || []).some(rosterName => normalizePlayerNameKey_(rosterName) === key);
+}
+
+function syncRegistrationState() {
+  const nameInput = document.getElementById('registerPlayerName');
+  const keyInput = document.getElementById('registerTribalKey');
+  const registerBtn = document.getElementById('registerCastawayBtn');
+  const status = document.getElementById('registerCastawayStatus');
+  if (!nameInput || !keyInput || !registerBtn) return;
+
+  const exists = isExistingRosterName_(nameInput.value);
+  keyInput.disabled = exists;
+  registerBtn.disabled = exists;
+  if (exists) {
+    keyInput.value = '';
+    keyInput.placeholder = 'Existing Tribal Key cannot be changed';
+    if (status) status.textContent = 'This player is already on the roster. Enter the existing Tribal Key in the picks form below.';
+  } else {
+    keyInput.placeholder = 'Create a tribal key for a new player';
+    if (status && status.textContent.startsWith('This player is already')) status.textContent = '';
+  }
+}
+
 function registerCastaway() {
   const nameInput = document.getElementById('registerPlayerName');
   const keyInput = document.getElementById('registerTribalKey');
   const status = document.getElementById('registerCastawayStatus');
   const name = nameInput.value.trim();
   const tribalKey = keyInput.value.trim();
+
+  if (isExistingRosterName_(name)) {
+    syncRegistrationState();
+    showModal('Already Registered', 'This player is already on the roster. Use the existing Tribal Key in the picks form; it cannot be replaced here.');
+    return;
+  }
 
   if (!name || !tribalKey) {
     showModal('Missing Registration', 'Enter your castaway name and tribal key.');
