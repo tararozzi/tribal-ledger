@@ -2060,10 +2060,10 @@ tbody tr:hover td {
 .reaction-bar {
   display: flex;
   flex-wrap: nowrap;
-  gap: 8px;
-  overflow-x: auto;
+  gap: 4px;
+  overflow-x: hidden;
   margin: 12px 0 4px;
-  padding: 8px;
+  padding: 6px;
   border: 1px solid rgba(143, 101, 64, 0.34);
   border-radius: 8px;
   background:
@@ -2074,9 +2074,10 @@ tbody tr:hover td {
 .reaction-btn {
   appearance: none;
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   min-height: 34px;
   border: 1px solid rgba(47, 113, 108, 0.26);
   border-radius: 999px;
@@ -2085,7 +2086,7 @@ tbody tr:hover td {
   cursor: pointer;
   font-family: inherit;
   font-weight: 900;
-  padding: 6px 9px;
+  padding: 6px 5px;
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 }
 
@@ -2843,11 +2844,12 @@ tbody tr:hover td {
   }
 
   .reaction-bar {
-    gap: 6px;
+    gap: 3px;
   }
 
   .reaction-btn {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
     justify-content: center;
   }
 
@@ -2911,7 +2913,9 @@ tbody tr:hover td {
 }
 
 .camp-picks-table {
-  min-width: 1120px;
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 .leaderboard-ledger-table {
@@ -3145,6 +3149,10 @@ tbody tr:hover td {
   z-index: 40;
 }
 
+.reaction-count:empty {
+  display: none;
+}
+
 .entry-fee-acknowledgment {
   display: flex;
   align-items: flex-start;
@@ -3221,7 +3229,7 @@ tbody tr:hover td {
 }
 
 .camp-picks-scroll {
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
   max-height: 72vh;
 }
@@ -3230,10 +3238,10 @@ tbody tr:hover td {
   position: sticky !important;
   left: 0;
   z-index: 22;
-  min-width: 210px;
-  max-width: 260px;
-  width: 230px;
-  padding-inline: 14px;
+  min-width: 0;
+  max-width: none;
+  width: 18%;
+  padding-inline: 8px;
   border-right: 2px solid rgba(202, 167, 101, 0.9) !important;
   box-shadow: 10px 0 18px rgba(47, 32, 18, 0.14);
 }
@@ -3256,6 +3264,10 @@ tbody tr:hover td {
 .camp-picks-table th,
 .camp-picks-table td {
   text-align: center;
+  min-width: 0;
+  padding: 8px 5px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .camp-picks-table .sticky-player,
@@ -3271,6 +3283,11 @@ tbody tr:hover td {
 .camp-picks-table .pick-pill {
   justify-content: center;
   text-align: center;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ledger-week-header {
@@ -3281,12 +3298,17 @@ tbody tr:hover td {
 }
 
 .ledger-question-header {
-  min-height: 76px;
+  min-height: 64px;
 }
 
 .ledger-question-text {
   display: block;
   font-weight: 900;
+}
+
+.camp-picks-table .ledger-question-text {
+  font-size: 0.78rem;
+  line-height: 1.15;
 }
 
 .ledger-points {
@@ -4852,7 +4874,7 @@ function renderReactionBar(targetId, counts, targetType, week) {
   const buttons = getReactionTypes().map(reaction => `
     <button class="reaction-btn" type="button" data-reaction="${escapeAttr(reaction.key)}" title="${escapeAttr(reaction.label)}" aria-label="${escapeAttr(reaction.label)}" onclick="toggleReactionButton(this)">
       <span class="reaction-emoji">${reaction.emoji}</span>
-      <span class="reaction-count">${escapeHtml(String((counts && counts[reaction.key]) || 0))}</span>
+      <span class="reaction-count">${Number(counts && counts[reaction.key]) > 0 ? escapeHtml(String(counts[reaction.key])) : ''}</span>
     </button>
   `).join('');
   return `
@@ -4971,7 +4993,10 @@ function applyInteractionState(state) {
       bar.querySelectorAll('.reaction-btn').forEach(btn => {
         const key = btn.dataset.reaction;
         const count = btn.querySelector('.reaction-count');
-        if (count) count.textContent = String((data.counts && data.counts[key]) || 0);
+        if (count) {
+          const value = Number(data.counts && data.counts[key]) || 0;
+          count.textContent = value > 0 ? String(value) : '';
+        }
         btn.classList.toggle('selected', !!(data.selected && data.selected[key]));
       });
     });
