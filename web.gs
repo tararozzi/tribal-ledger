@@ -502,7 +502,19 @@ function getQuestionConfigForWeek_(week, fallbackConfig) {
   const snapshot = getQuestionConfigFromPicks_(weekNumber);
   if (snapshot) return mergeQuestionConfig_(base, snapshot);
 
-  return base;
+  if (weekNumber === Number(base.WeekNumber || 1)) return base;
+  return mergeQuestionConfig_(base, blankQuestionWeekConfig_());
+}
+
+function blankQuestionWeekConfig_() {
+  const config = { CommentPromptTemplate: '' };
+  for (let i = 1; i <= 8; i++) {
+    config[`Q${i}`] = '';
+    config[`Q${i}Points`] = '';
+    config[`Q${i}Type`] = '';
+    config[`Q${i}Options`] = '';
+  }
+  return config;
 }
 
 function mergeQuestionConfig_(baseConfig, questionConfig) {
@@ -638,8 +650,8 @@ function getConfiguredTeamOptions_(config) {
 }
 
 function normalizeQuestionType_(value) {
-  const type = String(value || 'cast').trim().toLowerCase();
-  return ['cast', 'teams', 'custom'].includes(type) ? type : 'cast';
+  const type = String(value || '').trim().toLowerCase();
+  return ['cast', 'teams', 'custom'].includes(type) ? type : '';
 }
 
 function cleanQuestionPrompt_(html) {
@@ -1616,6 +1628,17 @@ function adminSaveContentBlocks(passcode, payload) {
     Q8Options: String(payload.q8Options || '').trim(),
     CommentPromptTemplate: cleanQuestionPrompt_(payload.commentPromptTemplate)
   };
+
+  for (let i = 1; i <= 8; i++) {
+    if (questionConfig[`Q${i}`] && !questionConfig[`Q${i}Type`]) {
+      throw new Error(`Select an Options Source for Q${i} before saving.`);
+    }
+    if (!questionConfig[`Q${i}`]) {
+      questionConfig[`Q${i}Type`] = '';
+      questionConfig[`Q${i}Options`] = '';
+      questionConfig[`Q${i}Points`] = '';
+    }
+  }
 
   upsertQuestionWeekConfig_(questionWeek, questionConfig);
 

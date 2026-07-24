@@ -2077,30 +2077,29 @@ tbody tr:hover td {
   flex: 1 1 0;
   min-width: 0;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
   min-height: 34px;
-  border: 1px solid rgba(47, 113, 108, 0.26);
-  border-radius: 999px;
-  background: rgba(255, 248, 229, 0.88);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #2f2217;
   cursor: pointer;
   font-family: inherit;
   font-weight: 900;
-  padding: 6px 5px;
+  padding: 4px 2px;
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 }
 
 .reaction-btn:hover {
   transform: translateY(-1px);
-  border-color: rgba(217, 164, 65, 0.78);
-  box-shadow: 0 0 16px rgba(240, 184, 77, 0.22), 0 6px 12px rgba(0,0,0,0.1);
+  box-shadow: none;
 }
 
 .reaction-btn.selected {
-  background: linear-gradient(135deg, rgba(240, 184, 77, 0.95), rgba(255, 211, 122, 0.9));
-  border-color: #8f6540;
+  background: transparent;
+  border-color: transparent;
   color: #1f170f;
-  box-shadow: 0 0 18px rgba(240, 184, 77, 0.34);
+  box-shadow: none;
 }
 
 .reaction-emoji {
@@ -2111,10 +2110,10 @@ tbody tr:hover td {
 .reaction-count {
   display: inline-grid;
   place-items: center;
-  min-width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(47, 34, 23, 0.12);
+  min-width: 0;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
   font-size: 0.78rem;
 }
 
@@ -2844,7 +2843,7 @@ tbody tr:hover td {
   }
 
   .reaction-bar {
-    gap: 3px;
+    gap: 1px;
   }
 
   .reaction-btn {
@@ -3762,6 +3761,7 @@ tbody tr:hover td {
                   <input id="adminQ1Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ1Type">Q1 Options Source</label>
                   <select id="adminQ1Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3782,6 +3782,7 @@ tbody tr:hover td {
                   <input id="adminQ2Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ2Type">Q2 Options Source</label>
                   <select id="adminQ2Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3802,6 +3803,7 @@ tbody tr:hover td {
                   <input id="adminQ3Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ3Type">Q3 Options Source</label>
                   <select id="adminQ3Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3822,6 +3824,7 @@ tbody tr:hover td {
                   <input id="adminQ4Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ4Type">Q4 Options Source</label>
                   <select id="adminQ4Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3842,6 +3845,7 @@ tbody tr:hover td {
                   <input id="adminQ5Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ5Type">Q5 Options Source</label>
                   <select id="adminQ5Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3862,6 +3866,7 @@ tbody tr:hover td {
                   <input id="adminQ6Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ6Type">Q6 Options Source</label>
                   <select id="adminQ6Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3882,6 +3887,7 @@ tbody tr:hover td {
                   <input id="adminQ7Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ7Type">Q7 Options Source</label>
                   <select id="adminQ7Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -3902,6 +3908,7 @@ tbody tr:hover td {
                   <input id="adminQ8Points" class="text-input question-points-input" type="number" step="1" placeholder="Points">
                   <label class="admin-label" for="adminQ8Type">Q8 Options Source</label>
                   <select id="adminQ8Type" class="text-input">
+                    <option value="">Select Source</option>
                     <option value="cast">Cast</option>
                     <option value="teams">Teams</option>
                     <option value="custom">Manual Options</option>
@@ -5977,7 +5984,7 @@ function populateAdminQuestionFields(blocks) {
   for (let i = 1; i <= 8; i++) {
     setRichEditorHtml(`adminQ${i}`, blocks[`q${i}`] || '');
     document.getElementById(`adminQ${i}Points`).value = blocks[`q${i}Points`] ?? '';
-    document.getElementById(`adminQ${i}Type`).value = blocks[`q${i}Type`] || 'cast';
+    document.getElementById(`adminQ${i}Type`).value = blocks[`q${i}Type`] || '';
     document.getElementById(`adminQ${i}Options`).value = blocks[`q${i}Options`] || '';
   }
   setRichEditorHtml('adminCommentPromptTemplate', blocks.commentPromptTemplate || '');
@@ -6120,6 +6127,14 @@ function adminSendPlayerUpdateEmail() {
 }
 
 function adminSaveContentBlocks() {
+  for (let i = 1; i <= 8; i++) {
+    const prompt = getRichEditorHtml(`adminQ${i}`).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim();
+    const source = document.getElementById(`adminQ${i}Type`).value;
+    if (prompt && !source) {
+      showModal('Options Source Required', `Select an Options Source for Q${i} before saving.`);
+      return;
+    }
+  }
   google.script.run
     .withSuccessHandler(r => {
       showModal('Camp Updated', r.message || 'Camp content updated.');
