@@ -195,6 +195,7 @@ function getVercelRpcHandlers_() {
     adminRecalculateScores,
     adminSaveCastawayBio,
     adminSaveContentBlocks,
+    adminSaveCurrentWeek,
     adminSaveVotingSchedule,
     adminSaveInteractionSettings,
     adminSaveRecap,
@@ -329,7 +330,7 @@ function getInteractionConfig_(config) {
 }
 
 function registerPlayer(name, tribalKey, entryFeeAcknowledged) {
-  const cleanName = String(name || '').trim();
+  const cleanName = normalizePlayerDisplayName51_(name);
   const cleanKey = String(tribalKey || '').trim();
   if (!cleanName) throw new Error('Enter your castaway name.');
   if (!cleanKey) throw new Error('Enter your tribal key.');
@@ -856,7 +857,8 @@ function upsertPickRecord_(payload, options) {
 function validateSubmissionPayload_(payload, isAdmin) {
   if (!payload) throw new Error('Missing submission payload.');
 
-  const name = String(payload.name || '').trim();
+  const name = normalizePlayerDisplayName51_(payload.name);
+  payload.name = name;
   const tribalKey = String(payload.tribalKey || '').trim();
   const week = Number(payload.week || 0);
 
@@ -1106,6 +1108,16 @@ function adminSetVotingOpen(passcode, isOpen) {
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'VotingOpen', isOpen ? 'TRUE' : 'FALSE');
   return { ok: true, message: isOpen ? 'Voting is now OPEN.' : 'Voting is now CLOSED.' };
+}
+
+function adminSaveCurrentWeek(passcode, week) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const targetWeek = Number(week || 0);
+  if (!Number.isInteger(targetWeek) || targetWeek < 1) throw new Error('Enter a valid current week.');
+  const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
+  setConfigValue_(configSheet, 'WeekNumber', targetWeek);
+  SpreadsheetApp.flush();
+  return { ok: true, weekNumber: targetWeek, message: `Current week updated to Week ${targetWeek}.` };
 }
 
 function adminSaveVotingSchedule(passcode, payload) {
@@ -2111,7 +2123,7 @@ function addRecapComment(week, name, comment, sessionId) {
   if (!getInteractionConfig_(config).commentsEnabled) throw new Error('Comments are currently closed.');
 
   const cleanWeek = Number(week || 0);
-  const cleanName = String(name || '').trim();
+  const cleanName = normalizePlayerDisplayName51_(name);
   const cleanComment = String(comment || '').replace(/<[^>]*>/g, '').trim();
   if (!cleanWeek) throw new Error('Missing recap week.');
   if (!cleanName) throw new Error('Enter your player name.');

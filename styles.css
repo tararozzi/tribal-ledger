@@ -1378,6 +1378,17 @@ select:focus {
   background: #fffefa;
 }
 
+.text-input::placeholder,
+.text-area::placeholder,
+input::placeholder,
+textarea::placeholder,
+select:has(option:checked[value=""]),
+select option[value=""],
+.rich-editor:empty::before {
+  color: #7f7f7f !important;
+  opacity: 1;
+}
+
 .text-area {
   resize: vertical;
   min-height: 120px;
@@ -1404,7 +1415,7 @@ select:focus {
 
 .rich-editor:empty::before {
   content: attr(data-placeholder);
-  color: #9a8363;
+  color: #7f7f7f;
   pointer-events: none;
 }
 

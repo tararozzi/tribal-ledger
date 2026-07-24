@@ -1384,6 +1384,17 @@ select:focus {
   background: #fffefa;
 }
 
+.text-input::placeholder,
+.text-area::placeholder,
+input::placeholder,
+textarea::placeholder,
+select:has(option:checked[value=""]),
+select option[value=""],
+.rich-editor:empty::before {
+  color: #7f7f7f !important;
+  opacity: 1;
+}
+
 .text-area {
   resize: vertical;
   min-height: 120px;
@@ -1410,7 +1421,7 @@ select:focus {
 
 .rich-editor:empty::before {
   content: attr(data-placeholder);
-  color: #9a8363;
+  color: #7f7f7f;
   pointer-events: none;
 }
 
@@ -3412,7 +3423,7 @@ tbody tr:hover td {
       <div class="torch-bowl"></div>
       <div class="torch-handle"></div>
     </div>
-    <div class="loading-torch-text">Tending the fire...</div>
+    <div class="loading-torch-text" aria-live="polite">Tending the fire&hellip;</div>
   </div>
 
   <div class="app-shell">
@@ -3541,7 +3552,7 @@ tbody tr:hover td {
             <div class="admin-grid compact-admin-grid">
               <div>
                 <label class="admin-label" for="registerPlayerName">Castaway Name</label>
-                <input id="registerPlayerName" class="text-input" placeholder="Enter your castaway name" oninput="syncRegistrationState()">
+                <input id="registerPlayerName" class="text-input" placeholder="Enter your castaway name" oninput="syncRegistrationState()" onblur="normalizePlayerNameInput_(this); syncRegistrationState()">
               </div>
               <div>
                 <label class="admin-label" for="registerTribalKey">Tribal Key</label>
@@ -3561,7 +3572,7 @@ tbody tr:hover td {
           <form id="picksForm">
             <div class="question-block">
               <div class="question-title">Player Name</div>
-              <input id="playerName" class="text-input" placeholder="Enter your name exactly as listed">
+              <input id="playerName" class="text-input" placeholder="Enter your name exactly as listed" onblur="normalizePlayerNameInput_(this)">
             </div>
 
             <div class="question-block">
@@ -3590,7 +3601,7 @@ tbody tr:hover td {
           <div class="my-picks-lookup">
             <div>
               <label class="admin-label" for="myGameName">Your Name</label>
-              <input id="myGameName" class="text-input" placeholder="Enter your name">
+              <input id="myGameName" class="text-input" placeholder="Enter your name" onblur="normalizePlayerNameInput_(this)">
             </div>
             <div>
               <label class="admin-label" for="myGameWeek">Week</label>
@@ -3687,6 +3698,13 @@ tbody tr:hover td {
               <h3 class="section-title mini">Voting Controls</h3>
               <div class="admin-grid compact-admin-grid">
                 <div>
+                  <label class="admin-label" for="adminCurrentWeek">Current Week</label>
+                  <input id="adminCurrentWeek" class="text-input" type="number" min="1" placeholder="Week #">
+                </div>
+                <div class="admin-action-cell">
+                  <button class="btn btn-primary" type="button" onclick="adminSaveCurrentWeek()">Save Current Week</button>
+                </div>
+                <div>
                   <label class="admin-label" for="adminCloseDay">Voting Deadline Day</label>
                   <select id="adminCloseDay" class="text-input">
                     <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
@@ -3713,6 +3731,7 @@ tbody tr:hover td {
                 <button class="btn btn-danger" type="button" onclick="adminSetVoting(false)">Close Voting</button>
                 <button class="btn btn-secondary" type="button" onclick="loadAdminDashboard()">Refresh Council Status</button>
               </div>
+              <div class="tiny-note">Refresh Council Status reloads the current week, voting status, deadline and reveal schedule, season phase, submission totals, scoring summary, saved questions, castaway bios, comments, and reaction settings from the spreadsheet.</div>
               <div id="adminStatusBox" class="admin-status-box"></div>
             </div>
 
@@ -4922,7 +4941,7 @@ function renderRecapDiscussion(update) {
   const savedName = localStorage.getItem('survivor51_name') || '';
   const form = commentsAreEnabled() ? `
     <div class="recap-comment-form">
-      <input class="text-input recap-comment-name" placeholder="Player name" value="${escapeAttr(savedName)}">
+      <input class="text-input recap-comment-name" placeholder="Player name" value="${escapeAttr(savedName)}" onblur="normalizePlayerNameInput_(this)">
       <textarea class="text-area recap-comment-text" placeholder="Share your read on the episode, strategy, blindsides, alliances, or gameplay"></textarea>
       <button class="btn btn-primary" type="button" onclick="submitRecapComment(this, ${Number(update.week || 0)})">Post Comment</button>
     </div>
@@ -4957,15 +4976,19 @@ function renderCommentCard(comment) {
 
 function submitRecapComment(button, week) {
   const wrap = button.closest('.recap-comment-form');
-  const name = wrap.querySelector('.recap-comment-name').value.trim();
+  const nameInput = wrap.querySelector('.recap-comment-name');
+  const name = formatPlayerDisplayName_(nameInput.value);
+  nameInput.value = name;
   const text = wrap.querySelector('.recap-comment-text').value.trim();
   if (!name || !text) {
     showModal('Missing Comment', 'Enter your player name and a comment before posting.');
     return;
   }
   button.disabled = true;
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(result => {
+      hideLoadingTorch();
       button.disabled = false;
       localStorage.setItem('survivor51_name', name);
       const update = (APP_DATA.weeklyUpdates || []).find(item => Number(item.week) === Number(week));
@@ -4975,6 +4998,7 @@ function submitRecapComment(button, week) {
       if (discussion) discussion.scrollIntoView({ behavior: 'smooth', block: 'start' });
     })
     .withFailureHandler(err => {
+      hideLoadingTorch();
       button.disabled = false;
       showModal('Comment Error', getErrorMessage(err));
     })
@@ -4988,12 +5012,15 @@ function toggleReactionButton(button) {
   const reaction = button.dataset.reaction;
   const name = localStorage.getItem('survivor51_name') || '';
   button.disabled = true;
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(state => {
+      hideLoadingTorch();
       button.disabled = false;
       applyInteractionState(state);
     })
     .withFailureHandler(err => {
+      hideLoadingTorch();
       button.disabled = false;
       showModal('Reaction Error', getErrorMessage(err));
     })
@@ -5185,6 +5212,23 @@ function normalizePlayerNameKey_(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function formatPlayerDisplayName_(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(word => {
+      const lower = word.toLowerCase();
+      return lower.length <= 3 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+function normalizePlayerNameInput_(input) {
+  if (input) input.value = formatPlayerDisplayName_(input.value);
+}
+
 function isExistingRosterName_(name) {
   const key = normalizePlayerNameKey_(name);
   if (!key || !APP_DATA) return false;
@@ -5218,7 +5262,8 @@ function registerCastaway() {
   const nameInput = document.getElementById('registerPlayerName');
   const keyInput = document.getElementById('registerTribalKey');
   const status = document.getElementById('registerCastawayStatus');
-  const name = nameInput.value.trim();
+  const name = formatPlayerDisplayName_(nameInput.value);
+  nameInput.value = name;
   const tribalKey = keyInput.value.trim();
   const entryFeeAcknowledged = document.getElementById('registerEntryFeeAck').checked;
 
@@ -5239,18 +5284,27 @@ function registerCastaway() {
   }
 
   if (status) status.textContent = 'Adding you to the tribe roster...';
+  const registerButton = document.getElementById('registerCastawayBtn');
+  if (registerButton) registerButton.disabled = true;
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
-      localStorage.setItem('survivor51_name', name);
-      document.getElementById('savedNameDisplay').textContent = name;
-      document.getElementById('playerName').value = name;
+      hideLoadingTorch();
+      if (registerButton) registerButton.disabled = false;
+      const savedName = (r && r.name) || name;
+      localStorage.setItem('survivor51_name', savedName);
+      document.getElementById('savedNameDisplay').textContent = savedName;
+      document.getElementById('playerName').value = savedName;
       document.getElementById('playerTribalKey').value = tribalKey;
-      document.getElementById('myGameName').value = name;
+      document.getElementById('myGameName').value = savedName;
       if (status) status.textContent = r.message || 'Castaway registered.';
       showModal('Castaway Registered', r.message || 'Your castaway registration has been saved.');
       loadAppData();
     })
     .withFailureHandler(err => {
+      hideLoadingTorch();
+      hideLoadingTorch();
+      if (registerButton) registerButton.disabled = false;
       if (status) status.textContent = `Registration failed: ${getErrorMessage(err)}`;
       showModal('Registration Error', getErrorMessage(err));
     })
@@ -5269,7 +5323,9 @@ function handleSubmit(event) {
     return;
   }
 
-  const name = document.getElementById('playerName').value.trim();
+  const nameInput = document.getElementById('playerName');
+  const name = formatPlayerDisplayName_(nameInput.value);
+  nameInput.value = name;
   const tribalKey = document.getElementById('playerTribalKey').value.trim();
 
   if (!name) {
@@ -5328,7 +5384,9 @@ function handleSubmit(event) {
 }
 
 function loadMySubmission() {
-  const name = document.getElementById('myGameName').value.trim();
+  const nameInput = document.getElementById('myGameName');
+  const name = formatPlayerDisplayName_(nameInput.value);
+  nameInput.value = name;
   const week = Number(document.getElementById('myGameWeek').value || 0);
   const tribalKey = document.getElementById('myGameTribalKey').value.trim();
 
@@ -5756,6 +5814,8 @@ function loadAdminDashboard() {
 
       const weekInput = document.getElementById('adminQuestionWeek');
       if (weekInput) weekInput.value = data.weekNumber || 1;
+      const currentWeekInput = document.getElementById('adminCurrentWeek');
+      if (currentWeekInput) currentWeekInput.value = data.weekNumber || 1;
       const resultsWeekInput = document.getElementById('adminResultsWeek');
       if (resultsWeekInput && !resultsWeekInput.value) resultsWeekInput.value = data.weekNumber || 1;
       const bonusWeekInput = document.getElementById('adminBonusWeek');
@@ -6007,7 +6067,8 @@ function populateAdminContentBlocks(blocks, includeCampContent) {
 function populateAdminQuestionFields(blocks) {
   for (let i = 1; i <= 8; i++) {
     setRichEditorHtml(`adminQ${i}`, blocks[`q${i}`] || '');
-    document.getElementById(`adminQ${i}Points`).value = blocks[`q${i}Points`] ?? '';
+    const pointValue = blocks[`q${i}Points`];
+    document.getElementById(`adminQ${i}Points`).value = Number(pointValue) === 0 ? '' : (pointValue ?? '');
     document.getElementById(`adminQ${i}Type`).value = blocks[`q${i}Type`] || '';
     document.getElementById(`adminQ${i}Options`).value = blocks[`q${i}Options`] || '';
   }
@@ -6064,8 +6125,10 @@ function adminUseCurrentQuestionWeek() {
 }
 
 function adminSetVoting(isOpen) {
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       showModal('Voting Updated', r.message || 'Voting updated.');
       loadAdminDashboard();
       loadAppData();
@@ -6326,14 +6389,19 @@ function adminSaveCastawayBio() {
 }
 
 function adminSaveInteractionSettings() {
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       const status = document.getElementById('adminInteractionStatus');
       if (status) status.textContent = r.message || 'Interaction settings saved.';
       loadAdminDashboard();
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminSaveInteractionSettings(ADMIN_PASSCODE, {
       reactionsEnabled: document.getElementById('adminReactionsEnabled').checked,
       commentsEnabled: document.getElementById('adminCommentsEnabled').checked
@@ -6341,22 +6409,33 @@ function adminSaveInteractionSettings() {
 }
 
 function adminDeleteComment(commentId) {
+  if (!window.confirm('Remove this comment? This action cannot be undone from the website.')) return;
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       renderAdminComments((r && r.comments) || []);
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminDeleteComment(ADMIN_PASSCODE, commentId);
 }
 
 function adminPinComment(commentId, pinned) {
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       renderAdminComments((r && r.comments) || []);
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminPinComment(ADMIN_PASSCODE, commentId, pinned);
 }
 
@@ -6472,19 +6551,45 @@ function startCountdown(targetId, iso, endedText) {
 }
 
 function adminSaveVotingSchedule() {
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       showModal('Schedule Updated', r.message || 'Voting schedule updated.');
       loadAdminDashboard();
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminSaveVotingSchedule(ADMIN_PASSCODE, {
       closeDay: document.getElementById('adminCloseDay').value,
       closeTime: document.getElementById('adminCloseTime').value,
       revealDay: document.getElementById('adminRevealDay').value,
       revealTime: document.getElementById('adminRevealTime').value
     });
+}
+
+function adminSaveCurrentWeek() {
+  const week = Number(document.getElementById('adminCurrentWeek').value || 0);
+  if (!Number.isInteger(week) || week < 1) {
+    showModal('Week Needed', 'Enter a valid current week.');
+    return;
+  }
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(r => {
+      hideLoadingTorch();
+      showModal('Current Week Updated', r.message || `Current week updated to Week ${week}.`);
+      loadAdminDashboard();
+      loadAppData();
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
+    .adminSaveCurrentWeek(ADMIN_PASSCODE, week);
 }
 
 function populateAdminVotingSchedule(data) {
