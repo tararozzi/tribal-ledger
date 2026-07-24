@@ -3358,3 +3358,27 @@ tbody tr:hover td {
 .ledger-pick-cell {
   text-align: center;
 }
+
+#seasonTableContainer .season-ledger-table {
+  min-width: 1050px;
+}
+
+#seasonTableContainer .season-ledger-table th:not(.season-player-rank) {
+  min-width: 128px;
+  max-width: 180px;
+  padding-inline: 9px;
+}
+
+#seasonTableContainer .season-ledger-table .season-player-rank {
+  min-width: 195px;
+  max-width: 248px;
+}
+
+#seasonTableContainer .season-ledger-table td {
+  padding-inline: 7px;
+}
+
+#seasonTableContainer .season-ledger-table .pick-pill {
+  max-width: 173px;
+  padding-inline: 9px;
+}
