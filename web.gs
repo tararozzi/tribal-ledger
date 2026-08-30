@@ -196,6 +196,7 @@ function getVercelRpcHandlers_() {
     adminRecalculateScores,
     adminSaveCastawayBio,
     adminSaveTribe,
+    adminUpdatePlayerCredentials,
     adminSaveContentBlocks,
     adminSaveCurrentWeek,
     adminSaveVotingSchedule,
@@ -206,6 +207,7 @@ function getVercelRpcHandlers_() {
     adminSendPlayerUpdateEmail,
     adminSetVotingOpen,
     getAdminDashboard,
+    getAdminPlayerPasskey,
     getAdminQuestionWeek,
     getAdminResultAnswerChoices,
     getAppData,
@@ -1032,9 +1034,11 @@ function getAdminDashboard(passcode) {
   const weekNumber = Number(config.WeekNumber || 1);
   const finalWeek = Number(config.FinalWeek || 0);
   const seasonPhase = getSeasonPhase_(config, weekNumber, finalWeek);
+  const playerNames = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS)).map(row => String(row.Name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b));
 
   return {
     weekNumber,
+    playerNames,
     finalWeek,
     mergeWeek: Number(config.MergeWeek || 0),
     seasonPhase,
@@ -1057,6 +1061,63 @@ function getAdminDashboard(passcode) {
     interactions: getInteractionConfig_(config),
     comments: getAdminComments_()
   };
+}
+
+function getAdminPlayerPasskey(passcode, playerName) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const requestedName = String(playerName || '').trim();
+  if (!requestedName) throw new Error('Choose a player.');
+  const player = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
+    .find(row => normalizeTextKey51_(row.Name) === normalizeTextKey51_(requestedName));
+  if (!player) throw new Error('Player not found in the Players spreadsheet.');
+  return { name: String(player.Name || requestedName).trim(), passkey: String(player.TribalKey || '').trim() };
+}
+
+function adminUpdatePlayerCredentials(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const originalName = String((payload && payload.originalName) || '').trim();
+  const newName = normalizePlayerDisplayName51_((payload && payload.name) || '');
+  const newKey = String((payload && payload.tribalKey) || '').trim();
+  if (!originalName || !newName) throw new Error('A Castaway Name is required.');
+  if (!newKey || newKey.length > 200) throw new Error('Enter a valid Tribal Key.');
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.getActive();
+    const sheet = mustGetSheet_(ss, APP_SHEETS_51.PLAYERS);
+    const headers = getHeaders_(sheet);
+    const nameColumn = headers.indexOf('Name') + 1;
+    const keyColumn = headers.indexOf('TribalKey') + 1;
+    const players = readTable_(sheet);
+    const originalIndex = players.findIndex(row => normalizeTextKey51_(row.Name) === normalizeTextKey51_(originalName));
+    if (originalIndex < 0) throw new Error('The selected player could not be found. Refresh Admin and try again.');
+    if (players.some((row, index) => index !== originalIndex && normalizeTextKey51_(row.Name) === normalizeTextKey51_(newName))) throw new Error('That Castaway Name is already assigned to another player.');
+    if (!nameColumn || !keyColumn) throw new Error('The Players sheet is missing required credential columns.');
+    sheet.getRange(originalIndex + 2, nameColumn).setValue(newName);
+    sheet.getRange(originalIndex + 2, keyColumn).setValue(newKey);
+    if (originalName !== newName) {
+      [[APP_SHEETS_51.PICKS, 'Name'], [APP_SHEETS_51.SCORES, 'Name'], [APP_SHEETS_51.BONUSES, 'Player'], [APP_SHEETS_51.PHOTOS, 'Name'], [APP_SHEETS_51.REACTIONS, 'Name'], [APP_SHEETS_51.COMMENTS, 'Name']]
+        .forEach(([sheetName, field]) => updatePlayerNameInSheet51_(ss, sheetName, field, originalName, newName));
+    }
+    SpreadsheetApp.flush();
+    return { ok: true, name: newName, message: originalName === newName ? `${newName}'s Tribal Key was updated.` : `${originalName} was renamed to ${newName} and all related records were updated.`, playerNames: readTable_(sheet).map(row => String(row.Name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updatePlayerNameInSheet51_(ss, sheetName, field, originalName, newName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const column = getHeaders_(sheet).indexOf(field) + 1;
+  if (!column) return;
+  const range = sheet.getRange(2, column, sheet.getLastRow() - 1, 1);
+  const values = range.getValues();
+  let changed = false;
+  values.forEach(row => {
+    if (normalizeTextKey51_(row[0]) === normalizeTextKey51_(originalName)) { row[0] = newName; changed = true; }
+  });
+  if (changed) range.setValues(values);
 }
 
 function adminSaveCastawayBio(passcode, payload) {

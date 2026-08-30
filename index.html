@@ -1120,6 +1120,13 @@ body {
 
 #adminCastBioSection { order: 101; }
 
+#adminPlayerCredentialsSection { order: 102; }
+.player-credentials-list { display: grid; gap: 12px; margin-top: 18px; }
+.player-credential-card { padding: 14px; border: 1px solid rgba(143, 101, 64, 0.32); border-radius: 8px; background: rgba(98, 91, 82, 0.12); }
+.player-credential-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.player-credential-card input:disabled { background: #d8d5cf; color: #706b64; cursor: not-allowed; opacity: 0.78; }
+.player-credential-card.unlocked { border-color: var(--accent); background: rgba(240, 184, 77, 0.12); }
+
 .section {
   display: none;
 }
@@ -2783,6 +2790,10 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
+  .player-credential-fields {
+    grid-template-columns: 1fr;
+  }
+
   .voting-schedule-row {
     grid-template-columns: 1fr;
   }
@@ -3775,6 +3786,7 @@ tbody tr:hover td {
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Content</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminTribeSection')">Tribes</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCastBioSection')">Castaway Bios</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminPlayerCredentialsSection')">Credentials</button>
             </div>
 
             <!-- Voting Controls -->
@@ -4524,6 +4536,13 @@ tbody tr:hover td {
               </div>
             </div>
 
+            <div id="adminPlayerCredentialsSection" class="card inner-card admin-scroll-target">
+              <h3 class="section-title mini">Player Credentials</h3>
+              <p class="subtle">Castaway Names are listed below. Tribal Keys remain hidden until you unlock one player and confirm the Admin password again.</p>
+              <div id="adminPlayerCredentialsList" class="player-credentials-list"></div>
+              <div id="adminPlayerCredentialsStatus" class="tiny-note"></div>
+            </div>
+
           </div>
         </div>
       </section>
@@ -4551,6 +4570,8 @@ let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
 let ADMIN_TRIBES = [];
+let ADMIN_PLAYER_NAMES = [];
+let ADMIN_UNLOCKED_PLAYER = '';
 let ADMIN_SAVED_STATE = null;
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
@@ -6009,6 +6030,7 @@ function loadAdminDashboard() {
       populateAdminSeasonPhase(data);
       populateAdminVotingSchedule(data);
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
+      renderAdminPlayerCredentials(data.playerNames || []);
       populateAdminTribeList(data.tribes || []);
       populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
       populateAdminInteractionControls(data.interactions || {}, data.comments || []);
@@ -6058,6 +6080,79 @@ function populateAdminBonusPlayers(players) {
   if (current && activePlayers.some(player => player.name === current)) {
     select.value = current;
   }
+}
+
+function renderAdminPlayerCredentials(playerNames) {
+  ADMIN_PLAYER_NAMES = (playerNames || []).slice().sort((a, b) => a.localeCompare(b));
+  ADMIN_UNLOCKED_PLAYER = '';
+  const list = document.getElementById('adminPlayerCredentialsList');
+  if (!list) return;
+  if (!ADMIN_PLAYER_NAMES.length) { list.innerHTML = '<div class="announcement">No registered players found.</div>'; return; }
+  list.innerHTML = ADMIN_PLAYER_NAMES.map(name => `
+    <article class="player-credential-card" data-player="${escapeAttr(name)}">
+      <div class="player-credential-fields">
+        <div><label class="admin-label">Castaway Name</label><input class="text-input credential-name" value="${escapeAttr(name)}" disabled></div>
+        <div><label class="admin-label">Tribal Key</label><input class="text-input credential-key" type="password" placeholder="Hidden until unlocked" autocomplete="new-password" disabled></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-secondary credential-unlock" type="button" onclick="unlockPlayerCredentials(this)">Unlock to Edit</button><button class="btn btn-primary credential-save hidden" type="button" onclick="savePlayerCredentials(this)">Save Changes</button><button class="btn btn-secondary credential-cancel hidden" type="button" onclick="cancelPlayerCredentials()">Cancel</button></div>
+    </article>`).join('');
+}
+
+function lockAllPlayerCredentialCards_() {
+  document.querySelectorAll('.player-credential-card').forEach(card => {
+    card.classList.remove('unlocked');
+    card.querySelector('.credential-name').disabled = true;
+    card.querySelector('.credential-key').disabled = true;
+    card.querySelector('.credential-key').value = '';
+    card.querySelector('.credential-unlock').classList.remove('hidden');
+    card.querySelector('.credential-save').classList.add('hidden');
+    card.querySelector('.credential-cancel').classList.add('hidden');
+  });
+  ADMIN_UNLOCKED_PLAYER = '';
+}
+
+function unlockPlayerCredentials(button) {
+  const card = button.closest('.player-credential-card');
+  const playerName = card && card.dataset.player;
+  if (!playerName) return;
+  if (ADMIN_UNLOCKED_PLAYER && ADMIN_UNLOCKED_PLAYER !== playerName && !window.confirm('Cancel the currently unlocked player and unlock this one instead?')) return;
+  const confirmationPasscode = window.prompt(`Re-enter the Admin password to edit ${playerName}.`);
+  if (confirmationPasscode === null) return;
+  google.script.run.withSuccessHandler(result => {
+    lockAllPlayerCredentialCards_();
+    card.classList.add('unlocked');
+    card.querySelector('.credential-name').value = result.name || playerName;
+    card.querySelector('.credential-key').value = result.passkey || '';
+    card.querySelector('.credential-name').disabled = false;
+    card.querySelector('.credential-key').disabled = false;
+    card.querySelector('.credential-unlock').classList.add('hidden');
+    card.querySelector('.credential-save').classList.remove('hidden');
+    card.querySelector('.credential-cancel').classList.remove('hidden');
+    ADMIN_UNLOCKED_PLAYER = playerName;
+    document.getElementById('adminPlayerCredentialsStatus').textContent = `${playerName} is unlocked. Only this player can be edited.`;
+  }).withFailureHandler(error => showModal('Unable to Unlock', getErrorMessage(error))).getAdminPlayerPasskey(confirmationPasscode, playerName);
+}
+
+function cancelPlayerCredentials() {
+  lockAllPlayerCredentialCards_();
+  document.getElementById('adminPlayerCredentialsStatus').textContent = 'Credential editing cancelled. All players are locked.';
+}
+
+function savePlayerCredentials(button) {
+  const card = button.closest('.player-credential-card');
+  const originalName = card && card.dataset.player;
+  const name = card.querySelector('.credential-name').value.trim();
+  const tribalKey = card.querySelector('.credential-key').value.trim();
+  if (!name || !tribalKey) { showModal('Missing Credentials', 'Enter both a Castaway Name and Tribal Key.'); return; }
+  button.disabled = true;
+  google.script.run.withSuccessHandler(result => {
+    const savedLocalName = localStorage.getItem('survivor51_name') || '';
+    if (normalizeTextKey_(savedLocalName) === normalizeTextKey_(originalName)) localStorage.setItem('survivor51_name', result.name || name);
+    renderAdminPlayerCredentials(result.playerNames || ADMIN_PLAYER_NAMES);
+    captureAdminSavedState();
+    showModal('Player Credentials Updated', result.message || 'Player credentials updated.');
+    loadAppData();
+  }).withFailureHandler(error => { button.disabled = false; showModal('Unable to Save Credentials', getErrorMessage(error)); }).adminUpdatePlayerCredentials(ADMIN_PASSCODE, { originalName, name, tribalKey });
 }
 
 function populateAdminCastBioList(castRows) {

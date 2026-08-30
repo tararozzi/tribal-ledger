@@ -1114,6 +1114,13 @@ body {
 
 #adminCastBioSection { order: 101; }
 
+#adminPlayerCredentialsSection { order: 102; }
+.player-credentials-list { display: grid; gap: 12px; margin-top: 18px; }
+.player-credential-card { padding: 14px; border: 1px solid rgba(143, 101, 64, 0.32); border-radius: 8px; background: rgba(98, 91, 82, 0.12); }
+.player-credential-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.player-credential-card input:disabled { background: #d8d5cf; color: #706b64; cursor: not-allowed; opacity: 0.78; }
+.player-credential-card.unlocked { border-color: var(--accent); background: rgba(240, 184, 77, 0.12); }
+
 .section {
   display: none;
 }
@@ -2723,6 +2730,10 @@ tbody tr:hover td {
   }
 
   .admin-row {
+    grid-template-columns: 1fr;
+  }
+
+  .player-credential-fields {
     grid-template-columns: 1fr;
   }
 
