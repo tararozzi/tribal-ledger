@@ -926,6 +926,36 @@ function normNameDisplay_(value) {
   return normalizePlayerDisplayName51_(value);
 }
 
+function syncTribalLedgerSheetSchema() {
+  const ss = SpreadsheetApp.getActive();
+  const updates = [];
+  [
+    { name: GAME_SHEETS_51.TRIBES, headers: GAME_HEADERS_51.TRIBES },
+    { name: GAME_SHEETS_51.PLAYERS, headers: GAME_HEADERS_51.PLAYERS }
+  ].forEach(definition => {
+    let sheet = ss.getSheetByName(definition.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(definition.name);
+      sheet.getRange(1, 1, 1, definition.headers.length).setValues([definition.headers]);
+      updates.push(`Created ${definition.name}`);
+      return;
+    }
+    if (sheet.getLastRow() === 0) {
+      sheet.getRange(1, 1, 1, definition.headers.length).setValues([definition.headers]);
+      updates.push(`Added headers to ${definition.name}`);
+      return;
+    }
+    const existingHeaders = getHeaders_(sheet);
+    const missingHeaders = definition.headers.filter(header => !existingHeaders.includes(header));
+    if (missingHeaders.length) {
+      sheet.getRange(1, existingHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+      updates.push(`Added ${missingHeaders.join(', ')} to ${definition.name}`);
+    }
+  });
+  SpreadsheetApp.flush();
+  return { ok: true, message: updates.length ? updates.join('; ') : 'Google Sheets already matches the website schema.' };
+}
+
 function nameKey51_(value) {
   return normName_(value);
 }
