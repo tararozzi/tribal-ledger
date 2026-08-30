@@ -66,7 +66,7 @@ const SEASON_PHASES_51 = {
     votingBoardTitle: 'Survivor Voting Board',
     submitLabel: 'Submit Parchment',
     reminder: 'Read the alliances, trust the edit, and keep your torch burning.',
-    picksHidden: 'Picks will be revealed after the Wednesday 8:00 PM episode update.',
+    picksHidden: 'Picks will be revealed Wednesday at 12:00 PM.',
     rankingsTitle: 'Current Tribe Rankings',
     recapEmpty: 'Weekly recap coming soon.',
     photoEmpty: 'No tribe snapshots yet this week.',
@@ -241,7 +241,9 @@ function include(filename) {
 
 function getAppData() {
   const ss = SpreadsheetApp.getActive();
-  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const configSheet = mustGetSheet_(ss, APP_SHEETS_51.CONFIG);
+  const config = readConfig_(configSheet);
+  applyNoonCampPicksMigration51_(configSheet, config);
   const castRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAST));
   const playerRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS));
   const timezone = String(config.Timezone || 'America/Los_Angeles');
@@ -324,6 +326,17 @@ function getAppData() {
 
 function getCastBioRows_() {
   return getCastGrid_(readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CAST)));
+}
+
+function applyNoonCampPicksMigration51_(configSheet, config) {
+  if (String(config.NoonCampPicksMigrationComplete || '').trim().toUpperCase() === 'TRUE') return;
+  setConfigValue_(configSheet, 'RevealDay', 'Wednesday');
+  setConfigValue_(configSheet, 'RevealTime', '12:00 PM');
+  setConfigValue_(configSheet, 'NoonCampPicksMigrationComplete', 'TRUE');
+  config.RevealDay = 'Wednesday';
+  config.RevealTime = '12:00 PM';
+  config.NoonCampPicksMigrationComplete = 'TRUE';
+  SpreadsheetApp.flush();
 }
 
 function getTribeRows_() {

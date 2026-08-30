@@ -3715,7 +3715,7 @@ tbody tr:hover td {
             <div>
               <h2 class="section-title">Camp Picks</h2>
               <p class="subtle">Compare every player's answers for the selected week and read any shared campfire thoughts.</p>
-              <p class="subtle">Public after the Wednesday 8:00 PM episode update.</p>
+              <p id="campPicksPublicDescription" class="subtle">Public Wednesday at 12:00 PM.</p>
             </div>
             <div class="picksview-controls">
               <label class="admin-label" for="picksWeekSelect">Week</label>
@@ -4805,6 +4805,8 @@ function renderApp(data) {
   document.getElementById('weekDisplay').textContent = `Week ${data.weekNumber}`;
   document.getElementById('deadlineText').textContent = data.voting.deadlineLabel || 'Deadline not set';
   document.getElementById('episodeLabel').textContent = data.episode.label || 'Wednesday 8:00 PM';
+  const campPicksDescription = document.getElementById('campPicksPublicDescription');
+  if (campPicksDescription) campPicksDescription.textContent = `Public ${data.reveal.revealLabel || 'Wednesday 12:00 PM'}.`;
   const entryFeeText = document.getElementById('entryFeeAcknowledgmentText');
   if (entryFeeText) entryFeeText.textContent = `I acknowledge that I will pay the $${data.entryFeeAmount || '20'} entry fee to join the tribe this season.`;
   const deadlineLabel = document.querySelector('.countdown-label');
@@ -4851,7 +4853,14 @@ function renderApp(data) {
   }
   startCountdown('episodeLive', data.episode.nextEpisodeIso, 'Now airing');
 
-  const savedName = localStorage.getItem('survivor51_name') || '';
+  let savedName = localStorage.getItem('survivor51_name') || '';
+  if (normalizePlayerNameKey_(savedName) === 'trent') {
+    localStorage.removeItem('survivor51_name');
+    savedName = '';
+    document.getElementById('savedNameDisplay').textContent = 'None';
+    document.getElementById('playerName').value = '';
+    document.getElementById('myGameName').value = '';
+  }
   if (savedName) {
     document.getElementById('savedNameDisplay').textContent = savedName;
     document.getElementById('playerName').value = savedName;
@@ -5707,7 +5716,8 @@ function renderEliteWeekPicks(data) {
 
   if (data.hidden) {
     const phaseMessages = (APP_DATA && APP_DATA.seasonPhase && APP_DATA.seasonPhase.messages) || {};
-    container.innerHTML = `<div class="announcement">${escapeHtml(phaseMessages.picksHidden || 'Picks will be revealed after the Wednesday 8:00 PM episode update.')}</div>`;
+    const revealLabel = APP_DATA && APP_DATA.reveal && APP_DATA.reveal.revealLabel;
+    container.innerHTML = `<div class="announcement">${escapeHtml(revealLabel ? `Picks will be public ${revealLabel}.` : (phaseMessages.picksHidden || 'Picks will be revealed Wednesday at 12:00 PM.'))}</div>`;
     return;
   }
 
