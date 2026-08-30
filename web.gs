@@ -2588,7 +2588,7 @@ function sanitizeHtml_(html) {
   const source = String(html || '')
     .replace(/&(?:amp;)*nbsp;|&#(?:160|x0*a0);|\u00a0/gi, ' ');
   const allowedTags = new Set([
-    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+    'div', 'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
     'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a'
   ]);
   const voidTags = new Set(['br']);
