@@ -127,6 +127,7 @@ body {
 }
 
 .nav-btn {
+  position: relative;
   background: rgba(255,255,255,0.07);
   color: var(--text-light);
   border: 1px solid rgba(255,255,255,0.13);
@@ -1383,6 +1384,42 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(47, 113, 108, 0.18);
   background: #fffefa;
 }
+
+.nav-btn::after,
+.described-btn::after {
+  content: attr(data-description);
+  position: absolute;
+  z-index: 1000;
+  left: 50%;
+  top: calc(100% + 9px);
+  width: max-content;
+  max-width: min(300px, 80vw);
+  padding: 9px 11px;
+  border: 1px solid rgba(240, 184, 77, 0.55);
+  border-radius: 7px;
+  background: #231910;
+  color: #fff8e7;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.nav-btn:hover::after,
+.nav-btn:focus-visible::after,
+.described-btn:hover::after,
+.described-btn:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.described-btn { position: relative; }
 
 .admin-current-week-grid {
   grid-template-columns: minmax(160px, 220px) auto;
@@ -3468,12 +3505,12 @@ tbody tr:hover td {
         </div>
 
         <nav class="nav">
-          <button class="nav-btn active" data-section="home">Back to Camp</button>
-          <button class="nav-btn" data-section="campPicks">Weekly Camp Picks</button>
-          <button class="nav-btn" data-section="seasonTable">Season Ledger</button>
-          <button class="nav-btn" data-section="bonusLog">Other Points</button>
-          <button class="nav-btn" data-section="mygame">My Picks</button>
-          <button class="nav-btn" data-section="admin">Admin</button>
+          <button class="nav-btn active" data-description="Return to camp for announcements, season details, voting status, and current standings." data-section="home">Back to Camp</button>
+          <button class="nav-btn" data-description="See everyone’s revealed weekly picks after the episode update." data-section="campPicks">Weekly Camp Picks</button>
+          <button class="nav-btn" data-description="View the full-season standings and each player’s accumulated points." data-section="seasonTable">Season Ledger</button>
+          <button class="nav-btn" data-description="Review bonus points, penalties, and other scoring adjustments." data-section="bonusLog">Other Points</button>
+          <button class="nav-btn" data-description="Look up your submitted picks and results by week." data-section="mygame">My Picks</button>
+          <button class="nav-btn" data-description="Manage voting, questions, scoring, content, castaway bios, and site settings." data-section="admin">Admin</button>
 
           <!-- =========================
             ADDITIONAL BUTTONS SAVED:
@@ -3518,11 +3555,11 @@ tbody tr:hover td {
         </div>
 
         <div class="hero-actions">
-          <button id="voteBtn" class="btn vote-btn closed" onclick="showSection('picks')">
+          <button id="voteBtn" class="btn vote-btn closed described-btn" data-description="Register for the season, then return here to cast your weekly vote." onclick="handlePrimaryAction()">
             Voting
           </button>
-          <button class="btn btn-secondary" onclick="showSection('castStatus')">Cast Status</button>
-          <button class="btn btn-secondary" onclick="showSection('recap')">Weekly Recaps</button>
+          <button class="btn btn-secondary described-btn" data-description="Meet the castaways and view their game status and biographies." onclick="showSection('castStatus')">Cast Status</button>
+          <button class="btn btn-secondary described-btn" data-description="Read the results and highlights from each completed week." onclick="showSection('recap')">Weekly Recaps</button>
         </div>
 
         <div id="seasonPhaseBanner" class="season-phase-banner"></div>
@@ -3576,14 +3613,11 @@ tbody tr:hover td {
         </div>
       </section>
 
-      <section id="picks" class="section">
+      <section id="register" class="section">
         <div class="card">
-          <h2 class="section-title" id="votingBoardTitle">Survivor Voting Board</h2>
-          <p class="subtle">Submit your predictions for the selected week before voting closes. Each question shows the answer choices and points available.</p>
-          <div id="phaseVotingReminder" class="phase-voting-reminder"></div>
-
           <div id="registerCastawayBox" class="register-castaway-box">
             <h3 class="section-title mini">Register Castaway</h3>
+            <p class="subtle">Join the season before weekly voting begins. Create your castaway name and private Tribal Key; you will use both when casting votes.</p>
             <div class="admin-grid compact-admin-grid">
               <div>
                 <label class="admin-label" for="registerPlayerName">Castaway Name</label>
@@ -3603,6 +3637,14 @@ tbody tr:hover td {
             </label>
             <div id="registerCastawayStatus" class="tiny-note"></div>
           </div>
+        </div>
+      </section>
+
+      <section id="picks" class="section">
+        <div class="card">
+          <h2 class="section-title" id="votingBoardTitle">Survivor Voting Board</h2>
+          <p class="subtle">Submit your predictions for the selected week before voting closes. Each question shows the answer choices and points available.</p>
+          <div id="phaseVotingReminder" class="phase-voting-reminder"></div>
 
           <form id="picksForm">
             <div class="question-block">
@@ -4706,9 +4748,11 @@ function renderApp(data) {
     voteBtn.classList.toggle('open', isOpen);
     voteBtn.classList.toggle('closed', !isOpen);
 
-    voteBtn.textContent = isOpen
-      ? (phaseMessages.votingLabelOpen || 'Voting')
-      : (phaseMessages.votingLabelClosed || 'Voting Closed');
+    const registered = isCurrentVisitorRegistered_();
+    voteBtn.textContent = registered ? 'Cast Your Vote' : 'Register';
+    voteBtn.dataset.description = registered
+      ? 'Open the weekly voting questions and submit your picks before the deadline.'
+      : 'Register your castaway name and create a private Tribal Key before weekly voting begins.';
   }
 
   document.getElementById('heroTitle').textContent = phaseMessages.heroTitle || `Week ${data.weekNumber}: Welcome back to camp.`;
@@ -4731,13 +4775,6 @@ function renderApp(data) {
     submitBtn.textContent = phaseMessages.submitLabel || 'Submit Parchment';
     submitBtn.disabled = phase.key === 'postfinale';
   }
-  const registerBox = document.getElementById('registerCastawayBox');
-  if (registerBox) {
-    const registrationClosed = Number(data.weekNumber || 0) > 1 ||
-      (Number(data.weekNumber || 0) === 1 && !data.voting.isOpen);
-    registerBox.classList.toggle('hidden', registrationClosed);
-  }
-
   document.getElementById('campAnnouncementsTitle').innerHTML = data.contentBlocks.campAnnouncementsTitle || 'Camp Announcements';
   const rulesTitle = normalizeCampRulesTitle_(data.contentBlocks.atAGlanceTitle);
   document.getElementById('atAGlanceTitle').innerHTML = rulesTitle === 'How to Play'
@@ -5342,6 +5379,14 @@ function isExistingRosterName_(name) {
   return rosterNames.some(rosterName => normalizePlayerNameKey_(rosterName) === key);
 }
 
+function isCurrentVisitorRegistered_() {
+  return isExistingRosterName_(localStorage.getItem('survivor51_name') || '');
+}
+
+function handlePrimaryAction() {
+  showSection(isCurrentVisitorRegistered_() ? 'picks' : 'register');
+}
+
 function syncRegistrationState() {
   const nameInput = document.getElementById('registerPlayerName');
   const keyInput = document.getElementById('registerTribalKey');
@@ -5402,6 +5447,14 @@ function registerCastaway() {
       document.getElementById('playerTribalKey').value = tribalKey;
       document.getElementById('myGameName').value = savedName;
       if (status) status.textContent = r.message || 'Castaway registered.';
+      if (APP_DATA && Array.isArray(APP_DATA.players) && !isExistingRosterName_(savedName)) {
+        APP_DATA.players.push({ name: savedName });
+      }
+      const voteBtn = document.getElementById('voteBtn');
+      if (voteBtn) {
+        voteBtn.textContent = 'Cast Your Vote';
+        voteBtn.dataset.description = 'Open the weekly voting questions and submit your picks before the deadline.';
+      }
       showModal('Castaway Registered', r.message || 'Your castaway registration has been saved.');
       loadAppData();
     })

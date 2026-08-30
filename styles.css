@@ -121,6 +121,7 @@ body {
 }
 
 .nav-btn {
+  position: relative;
   background: rgba(255,255,255,0.07);
   color: var(--text-light);
   border: 1px solid rgba(255,255,255,0.13);
@@ -1377,6 +1378,11 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(47, 113, 108, 0.18);
   background: #fffefa;
 }
+
+.nav-btn::after,
+.described-btn::after { content: attr(data-description); position: absolute; z-index: 1000; left: 50%; top: calc(100% + 9px); width: max-content; max-width: min(300px, 80vw); padding: 9px 11px; border: 1px solid rgba(240, 184, 77, 0.55); border-radius: 7px; background: #231910; color: #fff8e7; box-shadow: 0 8px 20px rgba(0,0,0,0.3); font-size: 0.78rem; font-weight: 600; line-height: 1.35; text-align: left; white-space: normal; opacity: 0; pointer-events: none; transform: translate(-50%, -4px); transition: opacity 0.16s ease, transform 0.16s ease; }
+.nav-btn:hover::after, .nav-btn:focus-visible::after, .described-btn:hover::after, .described-btn:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.described-btn { position: relative; }
 
 .admin-current-week-grid { grid-template-columns: minmax(160px, 220px) auto; }
 .voting-schedule-grid { display: grid; gap: 12px; margin-top: 18px; }
