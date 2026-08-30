@@ -4364,8 +4364,8 @@ tbody tr:hover td {
                   <input id="adminCastAge" class="text-input" placeholder="Age">
                 </div>
                 <div>
-                  <label class="admin-label" for="adminCastHometown">Hometown</label>
-                  <input id="adminCastHometown" class="text-input" list="adminCastHometownSuggestions" placeholder="Hometown">
+                  <label class="admin-label" for="adminCastHometown">From</label>
+                  <input id="adminCastHometown" class="text-input" list="adminCastHometownSuggestions" placeholder="City, state, or location">
                 </div>
                 <div>
                   <label class="admin-label" for="adminCastOccupation">Occupation</label>
@@ -5121,7 +5121,7 @@ function showCastCard(player) {
     ['Status', status],
     ['Tribe', player.team],
     ['Age', player.age],
-    ['Hometown', player.hometown],
+    ['From', player.hometown],
     ['Occupation', player.occupation]
   ].filter(row => String(row[1] || '').trim());
   const detailMarkup = detailRows.map(row => `
