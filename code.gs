@@ -170,6 +170,8 @@ function seedAppConfigIfMissing_() {
     SeasonPhaseManual: 'premiere',
     Timezone: 'America/Los_Angeles',
     VotingOpen: 'AUTO',
+    OpenDay: 'Monday',
+    OpenTime: '12:00 AM',
     CloseDay: 'Wednesday',
     CloseTime: '9:00 AM',
     RevealDay: 'Wednesday',

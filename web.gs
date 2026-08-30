@@ -1024,8 +1024,11 @@ function getAdminDashboard(passcode) {
     mergeWeek: Number(config.MergeWeek || 0),
     seasonPhase,
     votingStatus: voting.statusText,
+    openLabel: voting.openLabel,
     deadlineLabel: voting.deadlineLabel,
     revealLabel: reveal.revealLabel,
+    openDay: String(config.OpenDay || 'Monday'),
+    openTime: formatTimeForInput_(config.OpenTime || '12:00 AM'),
     closeDay: String(config.CloseDay || ''),
     closeTime: formatTimeForInput_(config.CloseTime),
     revealDay: String(config.RevealDay || config.EpisodeDay || ''),
@@ -1122,20 +1125,29 @@ function adminSaveCurrentWeek(passcode, week) {
 
 function adminSaveVotingSchedule(passcode, payload) {
   verifyAdminPasscodeOrThrow_(passcode);
+  const openDay = String((payload && payload.openDay) || '').trim();
+  const openTime = String((payload && payload.openTime) || '').trim();
   const closeDay = String((payload && payload.closeDay) || '').trim();
   const closeTime = String((payload && payload.closeTime) || '').trim();
   const revealDay = String((payload && payload.revealDay) || '').trim();
   const revealTime = String((payload && payload.revealTime) || '').trim();
-  parseRule_(closeDay, closeTime);
+  const openRule = parseRule_(openDay, openTime);
+  const closeRule = parseRule_(closeDay, closeTime);
   parseRule_(revealDay, revealTime);
+  if (openRule.dayNum === closeRule.dayNum && openRule.totalMinutes === closeRule.totalMinutes) {
+    throw new Error('Voting open and deadline cannot use the same day and time.');
+  }
 
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
+  setConfigValue_(configSheet, 'OpenDay', openDay);
+  setConfigValue_(configSheet, 'OpenTime', formatTimeForConfig_(openTime));
   setConfigValue_(configSheet, 'CloseDay', closeDay);
   setConfigValue_(configSheet, 'CloseTime', formatTimeForConfig_(closeTime));
   setConfigValue_(configSheet, 'RevealDay', revealDay);
   setConfigValue_(configSheet, 'RevealTime', formatTimeForConfig_(revealTime));
+  setConfigValue_(configSheet, 'VotingOpen', 'AUTO');
   SpreadsheetApp.flush();
-  return { ok: true, message: 'Voting deadline and picks reveal schedule saved to Config.' };
+  return { ok: true, message: 'Voting open, deadline, and picks reveal schedule saved. Automatic scheduling is active.' };
 }
 
 function adminSaveRecap(passcode, payload) {
@@ -2319,14 +2331,22 @@ function buildInteractionTargetId_(type, week, key) {
 
 function getVotingStatus_(config, timezone) {
   const manual = String(config.VotingOpen || '').trim().toUpperCase();
+  const openDay = config.OpenDay || 'Monday';
+  const openTime = config.OpenTime || '12:00 AM';
+  const openRule = parseRule_(openDay, openTime);
   const closeRule = parseRule_(config.CloseDay, config.CloseTime);
   const now = new Date();
+  const openLabel = buildRuleLabel_(openDay, openTime);
+  const deadlineLabel = buildRuleLabel_(config.CloseDay, config.CloseTime);
 
   if (manual === 'TRUE' || manual === 'OPEN' || manual === 'YES') {
     return {
       isOpen: true,
+      isManualOverride: true,
       statusText: 'Open',
-      deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
+      openLabel,
+      openIso: computeNextOccurrenceIso_(now, timezone, openRule.dayNum, openRule.totalMinutes),
+      deadlineLabel,
       deadlineIso: computeNextOccurrenceIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes)
     };
   }
@@ -2334,8 +2354,11 @@ function getVotingStatus_(config, timezone) {
   if (manual === 'FALSE' || manual === 'CLOSED' || manual === 'NO') {
     return {
       isOpen: false,
+      isManualOverride: true,
       statusText: 'Closed',
-      deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
+      openLabel,
+      openIso: computeNextOccurrenceIso_(now, timezone, openRule.dayNum, openRule.totalMinutes),
+      deadlineLabel,
       deadlineIso: computeNextOccurrenceIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes)
     };
   }
@@ -2345,13 +2368,21 @@ function getVotingStatus_(config, timezone) {
     Number(Utilities.formatDate(now, timezone, 'H')) * 60 +
     Number(Utilities.formatDate(now, timezone, 'm'));
 
-  const isOpen = nowDay < closeRule.dayNum || (nowDay === closeRule.dayNum && nowMinutes < closeRule.totalMinutes);
+  const nowWeekMinutes = (nowDay - 1) * 1440 + nowMinutes;
+  const openWeekMinutes = (openRule.dayNum - 1) * 1440 + openRule.totalMinutes;
+  const closeWeekMinutes = (closeRule.dayNum - 1) * 1440 + closeRule.totalMinutes;
+  const isOpen = openWeekMinutes < closeWeekMinutes
+    ? nowWeekMinutes >= openWeekMinutes && nowWeekMinutes < closeWeekMinutes
+    : nowWeekMinutes >= openWeekMinutes || nowWeekMinutes < closeWeekMinutes;
 
   return {
     isOpen,
+    isManualOverride: false,
     statusText: isOpen ? 'Open' : 'Closed',
-    deadlineLabel: buildRuleLabel_(config.CloseDay, config.CloseTime),
-    deadlineIso: computeUpcomingOrCurrentIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes, isOpen)
+    openLabel,
+    openIso: computeNextOccurrenceIso_(now, timezone, openRule.dayNum, openRule.totalMinutes),
+    deadlineLabel,
+    deadlineIso: computeNextOccurrenceIso_(now, timezone, closeRule.dayNum, closeRule.totalMinutes)
   };
 }
 

@@ -3715,6 +3715,16 @@ tbody tr:hover td {
                   <button class="btn btn-primary" type="button" onclick="adminSaveCurrentWeek()">Save Current Week</button>
                 </div>
                 <div>
+                  <label class="admin-label" for="adminOpenDay">Voting Opens Day</label>
+                  <select id="adminOpenDay" class="text-input">
+                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="admin-label" for="adminOpenTime">Voting Opens Time</label>
+                  <input id="adminOpenTime" class="text-input" type="time">
+                </div>
+                <div>
                   <label class="admin-label" for="adminCloseDay">Voting Deadline Day</label>
                   <select id="adminCloseDay" class="text-input">
                     <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
@@ -3741,6 +3751,7 @@ tbody tr:hover td {
                 <button class="btn btn-danger" type="button" onclick="adminSetVoting(false)">Close Voting</button>
                 <button class="btn btn-secondary" type="button" onclick="loadAdminDashboard()">Refresh Council Status</button>
               </div>
+              <div class="tiny-note">Saving the schedule activates automatic voting. The Open Voting and Close Voting buttons temporarily override the schedule.</div>
               <div class="tiny-note">Refresh Council Status reloads the current week, voting status, deadline and reveal schedule, season phase, submission totals, scoring summary, saved questions, castaway bios, comments, and reaction settings from the spreadsheet.</div>
               <div id="adminStatusBox" class="admin-status-box"></div>
             </div>
@@ -4669,8 +4680,14 @@ function renderApp(data) {
     document.getElementById('deadlineText').textContent = 'Final results posted';
     stopCountdown('deadlineLive', 'Season complete');
   } else if (!data.voting.isOpen) {
-    document.getElementById('deadlineText').textContent = '';
-    stopCountdown('deadlineLive', 'Voting is closed.');
+    if (data.voting.isManualOverride) {
+      document.getElementById('deadlineText').textContent = '';
+      stopCountdown('deadlineLive', 'Voting is closed.');
+    } else {
+      document.getElementById('deadlineText').textContent = data.voting.openLabel || 'Opening time not set';
+      if (deadlineLabel) deadlineLabel.textContent = 'Voting opens';
+      startCountdown('deadlineLive', data.voting.openIso, 'Voting is open');
+    }
   } else {
     startCountdown('deadlineLive', data.voting.deadlineIso, phase.key === 'finale' ? 'Final vote locked' : 'Voting closed');
   }
@@ -5815,6 +5832,7 @@ function loadAdminDashboard() {
       box.innerHTML = `
         <strong>Current Week:</strong> ${escapeHtml(String(data.weekNumber || ''))}<br>
         <strong>Voting Status:</strong> ${escapeHtml(data.votingStatus || '')}<br>
+        <strong>Opens:</strong> ${escapeHtml(data.openLabel || '')}<br>
         <strong>Deadline:</strong> ${escapeHtml(data.deadlineLabel || '')}<br>
         <strong>Reveal Time:</strong> ${escapeHtml(data.revealLabel || '')}<br>
         <strong>Season Phase:</strong> ${escapeHtml((data.seasonPhase && data.seasonPhase.label) || '')} (${escapeHtml((data.seasonPhase && data.seasonPhase.mode) || 'AUTO')})<br>
@@ -6575,6 +6593,8 @@ function adminSaveVotingSchedule() {
       showModal('Council Error', getErrorMessage(err));
     })
     .adminSaveVotingSchedule(ADMIN_PASSCODE, {
+      openDay: document.getElementById('adminOpenDay').value,
+      openTime: document.getElementById('adminOpenTime').value,
       closeDay: document.getElementById('adminCloseDay').value,
       closeTime: document.getElementById('adminCloseTime').value,
       revealDay: document.getElementById('adminRevealDay').value,
@@ -6604,6 +6624,8 @@ function adminSaveCurrentWeek() {
 }
 
 function populateAdminVotingSchedule(data) {
+  document.getElementById('adminOpenDay').value = data.openDay || 'Monday';
+  document.getElementById('adminOpenTime').value = data.openTime || '00:00';
   document.getElementById('adminCloseDay').value = data.closeDay || 'Wednesday';
   document.getElementById('adminCloseTime').value = data.closeTime || '';
   document.getElementById('adminRevealDay').value = data.revealDay || 'Wednesday';
