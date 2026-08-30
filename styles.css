@@ -1500,6 +1500,10 @@ select option[value=""],
     inset 6px 0 0 rgba(240, 184, 77, 0.3);
 }
 
+.admin-entry-text {
+  white-space: pre-wrap;
+}
+
 .bullet-list {
   color: #402d1f;
   line-height: 1.8;

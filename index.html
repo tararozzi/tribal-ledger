@@ -1506,6 +1506,10 @@ select option[value=""],
     inset 6px 0 0 rgba(240, 184, 77, 0.3);
 }
 
+.admin-entry-text {
+  white-space: pre-wrap;
+}
+
 .bullet-list {
   color: #402d1f;
   line-height: 1.8;
@@ -4700,7 +4704,7 @@ function renderContentBlocks(blocks) {
     : [phaseMessages.bannerBody, phaseMessages.reminder].filter(Boolean);
   uniqueBy_(campItems, text => stripHtml(text).toLowerCase()).forEach(text => {
     const div = document.createElement('div');
-    div.className = 'announcement';
+    div.className = 'announcement admin-entry-text';
     div.innerHTML = text === phaseMessages.bannerBody || text === phaseMessages.reminder ? escapeHtml(text) : text;
     camp.appendChild(div);
   });
@@ -4716,6 +4720,7 @@ function renderContentBlocks(blocks) {
       ].filter(Boolean);
   uniqueBy_(glanceItems, text => stripHtml(text).toLowerCase()).forEach(text => {
     const li = document.createElement('li');
+    li.className = 'admin-entry-text';
     li.innerHTML = text === phaseMessages.reminder ? escapeHtml(text) : text;
     glance.appendChild(li);
   });
@@ -4882,7 +4887,7 @@ function renderRecap(updates) {
     section.className = `recap-update album-week ${active ? 'active' : ''}`;
     section.innerHTML = `
       <h3 class="section-title mini">${update.title || `Week ${update.week} Recap`}</h3>
-      <div class="recap-box">${update.body || '<p>Weekly recap coming soon.</p>'}</div>
+      <div class="recap-box admin-entry-text">${update.body || '<p>Weekly recap coming soon.</p>'}</div>
       ${renderReactionBar(update.targetId || buildInteractionTargetId('recap', update.week), update.reactions || {}, 'recap', update.week)}
       <div class="recap-photos">
         <div class="album-week-heading">
