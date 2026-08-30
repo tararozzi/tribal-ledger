@@ -1378,6 +1378,11 @@ select:focus {
   background: #fffefa;
 }
 
+.admin-current-week-grid { grid-template-columns: minmax(160px, 220px) auto; }
+.voting-schedule-grid { display: grid; gap: 12px; margin-top: 18px; }
+.voting-schedule-row { display: grid; grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(160px, 1fr); align-items: end; gap: 12px; padding: 12px; border: 1px solid rgba(143, 101, 64, 0.3); border-radius: 8px; background: rgba(255, 250, 236, 0.32); }
+.voting-schedule-label { align-self: center; color: #3d2918; font-family: Georgia, 'Times New Roman', serif; font-size: 1.05rem; font-weight: 800; }
+
 .text-input::placeholder,
 .text-area::placeholder,
 input::placeholder,
@@ -2710,6 +2715,10 @@ tbody tr:hover td {
   }
 
   .admin-row {
+    grid-template-columns: 1fr;
+  }
+
+  .voting-schedule-row {
     grid-template-columns: 1fr;
   }
 

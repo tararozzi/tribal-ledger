@@ -1384,6 +1384,31 @@ select:focus {
   background: #fffefa;
 }
 
+.admin-current-week-grid {
+  grid-template-columns: minmax(160px, 220px) auto;
+}
+
+.voting-schedule-grid { display: grid; gap: 12px; margin-top: 18px; }
+
+.voting-schedule-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(160px, 1fr);
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(143, 101, 64, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 250, 236, 0.32);
+}
+
+.voting-schedule-label {
+  align-self: center;
+  color: #3d2918;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
 .text-input::placeholder,
 .text-area::placeholder,
 input::placeholder,
@@ -2719,6 +2744,10 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
+  .voting-schedule-row {
+    grid-template-columns: 1fr;
+  }
+
   .my-picks-lookup {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3706,7 +3735,7 @@ tbody tr:hover td {
             <!-- Voting Controls -->
             <div id="adminVotingControls" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Voting Controls</h3>
-              <div class="admin-grid compact-admin-grid">
+              <div class="admin-grid compact-admin-grid admin-current-week-grid">
                 <div>
                   <label class="admin-label" for="adminCurrentWeek">Current Week</label>
                   <input id="adminCurrentWeek" class="text-input" type="number" min="1" placeholder="Week #">
@@ -3714,35 +3743,46 @@ tbody tr:hover td {
                 <div class="admin-action-cell">
                   <button class="btn btn-primary" type="button" onclick="adminSaveCurrentWeek()">Save Current Week</button>
                 </div>
+              </div>
+              <div class="voting-schedule-grid" aria-label="Automatic voting schedule">
+                <div class="voting-schedule-row">
+                <div class="voting-schedule-label">Voting Opens</div>
                 <div>
-                  <label class="admin-label" for="adminOpenDay">Voting Opens Day</label>
+                  <label class="admin-label" for="adminOpenDay">Day</label>
                   <select id="adminOpenDay" class="text-input">
                     <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
                   </select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminOpenTime">Voting Opens Time</label>
+                  <label class="admin-label" for="adminOpenTime">Time</label>
                   <input id="adminOpenTime" class="text-input" type="time">
                 </div>
+                </div>
+                <div class="voting-schedule-row">
+                <div class="voting-schedule-label">Voting Deadline</div>
                 <div>
-                  <label class="admin-label" for="adminCloseDay">Voting Deadline Day</label>
+                  <label class="admin-label" for="adminCloseDay">Day</label>
                   <select id="adminCloseDay" class="text-input">
                     <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
                   </select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminCloseTime">Voting Deadline Time</label>
+                  <label class="admin-label" for="adminCloseTime">Time</label>
                   <input id="adminCloseTime" class="text-input" type="time">
                 </div>
+                </div>
+                <div class="voting-schedule-row">
+                <div class="voting-schedule-label">Picks Reveal</div>
                 <div>
-                  <label class="admin-label" for="adminRevealDay">Picks Reveal Day</label>
+                  <label class="admin-label" for="adminRevealDay">Day</label>
                   <select id="adminRevealDay" class="text-input">
                     <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
                   </select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminRevealTime">Picks Reveal Time</label>
+                  <label class="admin-label" for="adminRevealTime">Time</label>
                   <input id="adminRevealTime" class="text-input" type="time">
+                </div>
                 </div>
               </div>
               <div class="form-actions">
@@ -4445,6 +4485,7 @@ let PHOTO_MIME_TYPE = '';
 let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
+let ADMIN_SAVED_STATE = null;
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
@@ -4534,6 +4575,12 @@ window.onload = () => {
   setInterval(refreshVisibleReactionSelections, 30000);
 };
 
+window.addEventListener('beforeunload', event => {
+  if (!hasUnsavedAdminChanges()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 function handlePlainTextPaste(event) {
   const target = event.target;
   if (!target || !target.closest || !target.closest('[contenteditable="true"]')) return;
@@ -4543,6 +4590,14 @@ function handlePlainTextPaste(event) {
 }
 
 function showSection(sectionId) {
+  const activeSection = document.querySelector('.section.active');
+  if (activeSection && activeSection.id === 'admin' && sectionId !== 'admin' && hasUnsavedAdminChanges()) {
+    const shouldLeave = window.confirm('You have unsaved changes in Admin. Leave without saving them?');
+    if (!shouldLeave) return;
+    ADMIN_SAVED_STATE = null;
+    loadAdminDashboard();
+  }
+
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
@@ -4559,6 +4614,27 @@ function showSection(sectionId) {
   if (sectionId === 'seasonTable') loadSeasonResponsesTable();
   if (sectionId === 'bonusLog') loadBonusLog();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function getAdminFormState() {
+  const panel = document.getElementById('adminPanel');
+  if (!panel || panel.classList.contains('hidden')) return null;
+  const controls = Array.from(panel.querySelectorAll('input, select, textarea, [contenteditable="true"]'));
+  return JSON.stringify(controls.filter(control => !control.disabled && !control.readOnly).map((control, index) => {
+    let value;
+    if (control.matches('[contenteditable="true"]')) value = control.innerHTML;
+    else if (control.type === 'checkbox' || control.type === 'radio') value = control.checked;
+    else if (control.type === 'file') value = Array.from(control.files || []).map(file => [file.name, file.size, file.lastModified]);
+    else value = control.value;
+    return [control.id || control.name || `${control.tagName}:${index}`, value];
+  }));
+}
+
+function captureAdminSavedState() { ADMIN_SAVED_STATE = getAdminFormState(); }
+
+function hasUnsavedAdminChanges() {
+  const currentState = getAdminFormState();
+  return ADMIN_SAVED_STATE !== null && currentState !== null && currentState !== ADMIN_SAVED_STATE;
 }
 
 function scrollAdminSection(sectionId) {
@@ -5858,7 +5934,7 @@ function loadAdminDashboard() {
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
       populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
       populateAdminInteractionControls(data.interactions || {}, data.comments || []);
-      adminLoadResultAnswerChoices();
+      adminLoadResultAnswerChoices(true);
       populateAdminContentBlocks(data.contentBlocks || {}, true);
     })
     .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
@@ -6015,7 +6091,7 @@ function renderAdminComments(comments) {
   `).join('');
 }
 
-function adminLoadResultAnswerChoices() {
+function adminLoadResultAnswerChoices(captureSavedState) {
   if (!ADMIN_PASSCODE) return;
   const week = Number(document.getElementById('adminResultsWeek')?.value || (APP_DATA && APP_DATA.weekNumber) || 1);
   const status = document.getElementById('adminResultsChoicesStatus');
@@ -6024,10 +6100,12 @@ function adminLoadResultAnswerChoices() {
   google.script.run
     .withSuccessHandler(data => {
       populateAdminResultAnswerChoices((data && data.questions) || [], data && data.week);
+      if (captureSavedState) captureAdminSavedState();
     })
     .withFailureHandler(err => {
       if (status) status.textContent = `Unable to load answer choices: ${getErrorMessage(err)}`;
       populateAdminResultAnswerChoices([], week);
+      if (captureSavedState) captureAdminSavedState();
     })
     .getAdminResultAnswerChoices(ADMIN_PASSCODE, week);
 }
