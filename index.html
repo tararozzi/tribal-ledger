@@ -4854,7 +4854,7 @@ function renderApp(data) {
   startCountdown('episodeLive', data.episode.nextEpisodeIso, 'Now airing');
 
   let savedName = localStorage.getItem('survivor51_name') || '';
-  if (normalizePlayerNameKey_(savedName) === 'trent') {
+  if (savedName && !isExistingRosterName_(savedName)) {
     localStorage.removeItem('survivor51_name');
     savedName = '';
     document.getElementById('savedNameDisplay').textContent = 'None';

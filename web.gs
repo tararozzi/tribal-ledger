@@ -244,6 +244,7 @@ function getAppData() {
   const configSheet = mustGetSheet_(ss, APP_SHEETS_51.CONFIG);
   const config = readConfig_(configSheet);
   applyNoonCampPicksMigration51_(configSheet, config);
+  applyGoLiveRosterReset51_(ss, configSheet, config);
   const castRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAST));
   const playerRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS));
   const timezone = String(config.Timezone || 'America/Los_Angeles');
@@ -337,6 +338,27 @@ function applyNoonCampPicksMigration51_(configSheet, config) {
   config.RevealTime = '12:00 PM';
   config.NoonCampPicksMigrationComplete = 'TRUE';
   SpreadsheetApp.flush();
+}
+
+function applyGoLiveRosterReset51_(ss, configSheet, config) {
+  if (String(config.GoLiveRosterCleared || '').trim().toUpperCase() === 'TRUE') return;
+
+  const playersSheet = mustGetSheet_(ss, APP_SHEETS_51.PLAYERS);
+  const rosterCount = Math.max(0, playersSheet.getLastRow() - 1);
+  if (rosterCount) {
+    playersSheet.getRange(2, 1, rosterCount, playersSheet.getLastColumn()).clearContent();
+  }
+
+  setConfigValue_(configSheet, 'GoLiveRosterCleared', 'TRUE');
+  config.GoLiveRosterCleared = 'TRUE';
+  SpreadsheetApp.flush();
+  logAdminChange51_({
+    action: 'Clear Practice Roster',
+    section: 'Player Credentials',
+    record: 'Players roster',
+    previousValue: rosterCount + ' registered players',
+    newValue: '0 registered players'
+  });
 }
 
 function getTribeRows_() {
