@@ -2012,37 +2012,6 @@ tbody tr:hover td {
   border-top: 1px solid rgba(47, 113, 108, 0.18);
 }
 
-.admin-email-panel {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(47, 113, 108, 0.18);
-}
-
-.admin-email-preview {
-  margin-top: 12px;
-  border: 1px solid var(--parchment-line);
-  border-radius: 8px;
-  background: rgba(255, 253, 247, 0.76);
-  overflow: hidden;
-  box-shadow: 0 8px 18px rgba(47, 38, 28, 0.08);
-}
-
-.admin-email-meta {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--parchment-line);
-  color: #3a291b;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.admin-email-frame {
-  display: block;
-  width: 100%;
-  min-height: 620px;
-  border: 0;
-  background: #fffaf0;
-}
-
 .picksview-topbar {
   display: flex;
   justify-content: space-between;
@@ -4384,17 +4353,6 @@ tbody tr:hover td {
                 <button class="btn btn-primary" type="button" onclick="adminSaveRecap()">Save Recap</button>
               </div>
 
-              <div class="admin-email-panel">
-                <h3 class="section-title mini">Player Update Email</h3>
-                <p class="subtle">Generate this after correct answers, scores, and the weekly recap are updated.</p>
-                <div class="form-actions">
-                  <button class="btn btn-secondary" type="button" onclick="adminPreviewPlayerUpdateEmail()">Generate Preview</button>
-                  <button class="btn btn-primary" type="button" onclick="adminSendPlayerUpdateEmail()">Send to Admin Emails</button>
-                </div>
-                <div id="adminEmailStatus" class="tiny-note"></div>
-                <div id="adminEmailPreview" class="admin-email-preview hidden"></div>
-              </div>
-
               <div class="recap-photo-manager">
                 <h3 class="section-title mini">Campfire Memories Photos</h3>
                 <p class="subtle">Upload photos for the same week as this recap.</p>
@@ -6487,68 +6445,6 @@ function adminSaveRecap() {
       title: document.getElementById('adminRecapTitle').value,
       body: getRichEditorHtml('adminRecapBody')
     });
-}
-
-function getAdminEmailWeek() {
-  return Number(document.getElementById('adminRecapWeek')?.value || document.getElementById('adminResultsWeek')?.value || (APP_DATA && APP_DATA.weekNumber) || 1);
-}
-
-function renderAdminEmailPreview(email) {
-  const preview = document.getElementById('adminEmailPreview');
-  const status = document.getElementById('adminEmailStatus');
-  if (!preview) return;
-  const recipients = (email.recipients || []).join(', ') || 'No Admin Email recipients configured';
-  preview.classList.remove('hidden');
-  preview.innerHTML = `
-    <div class="admin-email-meta">
-      <strong>Subject:</strong> ${escapeHtml(email.subject || '')}<br>
-      <strong>Recipients:</strong> ${escapeHtml(recipients)}
-    </div>
-    <iframe class="admin-email-frame" title="Player update email preview"></iframe>
-  `;
-  const frame = preview.querySelector('iframe');
-  if (frame) {
-    frame.srcdoc = email.htmlBody || `<pre>${escapeHtml(email.body || '')}</pre>`;
-  }
-  if (status) status.textContent = `Preview generated for Week ${email.week || getAdminEmailWeek()}.`;
-}
-
-function adminPreviewPlayerUpdateEmail() {
-  if (!ADMIN_PASSCODE) {
-    showModal('Admin Only', 'Unlock the Admin Tribe Council before generating the update email.');
-    return;
-  }
-  const status = document.getElementById('adminEmailStatus');
-  if (status) status.textContent = 'Building the weekly player update...';
-
-  google.script.run
-    .withSuccessHandler(email => renderAdminEmailPreview(email || {}))
-    .withFailureHandler(err => {
-      if (status) status.textContent = `Unable to generate preview: ${getErrorMessage(err)}`;
-      showModal('Council Error', getErrorMessage(err));
-    })
-    .adminGeneratePlayerUpdateEmail(ADMIN_PASSCODE, getAdminEmailWeek());
-}
-
-function adminSendPlayerUpdateEmail() {
-  if (!ADMIN_PASSCODE) {
-    showModal('Admin Only', 'Unlock the Admin Tribe Council before sending the update email.');
-    return;
-  }
-  const status = document.getElementById('adminEmailStatus');
-  if (status) status.textContent = 'Sending the weekly player update...';
-
-  google.script.run
-    .withSuccessHandler(r => {
-      if (r && r.email) renderAdminEmailPreview(r.email);
-      if (status) status.textContent = r.message || 'Player update email sent.';
-      showModal('Player Update Sent', r.message || 'Player update email sent.');
-    })
-    .withFailureHandler(err => {
-      if (status) status.textContent = `Unable to send email: ${getErrorMessage(err)}`;
-      showModal('Council Error', getErrorMessage(err));
-    })
-    .adminSendPlayerUpdateEmail(ADMIN_PASSCODE, getAdminEmailWeek());
 }
 
 function adminSaveContentBlocks() {
