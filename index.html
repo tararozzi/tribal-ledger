@@ -1114,9 +1114,11 @@ body {
   order: 99;
 }
 
-#adminCastBioSection {
+#adminTribeSection {
   order: 100;
 }
+
+#adminCastBioSection { order: 101; }
 
 .section {
   display: none;
@@ -3746,7 +3748,7 @@ tbody tr:hover td {
       <section id="admin" class="section">
         <div class="card">
           <h2 class="section-title">Admin Tribe Council</h2>
-          <p class="subtle">Manage voting, season settings, questions, scoring, bonus points, recaps, interactions, camp content, passkeys, and castaway bios.</p>
+          <p class="subtle">Manage voting, season settings, questions, scoring, bonus points, recaps, interactions, camp content, passkeys, tribes, and castaway bios.</p>
 
           <div class="admin-row">
             <div>
@@ -3771,6 +3773,7 @@ tbody tr:hover td {
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminRecapSection')">Recap</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminInteractionsSection')">Interactions</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Content</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminTribeSection')">Tribes</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCastBioSection')">Castaway Bios</button>
             </div>
 
@@ -4428,6 +4431,26 @@ tbody tr:hover td {
               <div id="adminCommentsList" class="admin-comments-list"></div>
             </div>
 
+            <!-- Tribe Management -->
+            <div id="adminTribeSection" class="card inner-card admin-scroll-target">
+              <h3 class="section-title mini">Tribe Management</h3>
+              <p class="subtle">Add or update tribe names, photos, and an optional formatted description.</p>
+              <div class="admin-grid">
+                <div><label class="admin-label" for="adminTribeSelect">Edit Existing Tribe</label><select id="adminTribeSelect" class="text-input" onchange="populateAdminTribeForm()"></select></div>
+                <div class="admin-action-cell"><button class="btn btn-secondary" type="button" onclick="startNewTribe()">Add Brand-New Tribe</button></div>
+                <div><label class="admin-label" for="adminTribeName">Tribe Name</label><input id="adminTribeName" class="text-input" placeholder="Tribe name" onchange="handleAdminTribeNameInput()"></div>
+                <div><label class="admin-label" for="adminTribePhotoUrl">Photo URL</label><input id="adminTribePhotoUrl" class="text-input" list="adminTribePhotoSuggestions" placeholder="https://..."></div>
+              </div>
+              <datalist id="adminTribePhotoSuggestions"></datalist>
+              <div class="question-block">
+                <label class="admin-label" for="adminTribeDescription">Team Description (optional)</label>
+                <div class="toolbar" data-editor="adminTribeDescription"></div>
+                <div id="adminTribeDescription" class="rich-editor compact" contenteditable="true" data-placeholder="Describe this tribe, its identity, or its members"></div>
+              </div>
+              <div id="adminTribeStatus" class="tiny-note"></div>
+              <div class="form-actions"><button class="btn btn-primary" type="button" onclick="adminSaveTribe()">Save Tribe</button></div>
+            </div>
+
             <!-- Castaway Bio Management -->
             <div id="adminCastBioSection" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Castaway Bio Management</h3>
@@ -4527,6 +4550,7 @@ let PHOTO_MIME_TYPE = '';
 let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
+let ADMIN_TRIBES = [];
 let ADMIN_SAVED_STATE = null;
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
@@ -5985,6 +6009,7 @@ function loadAdminDashboard() {
       populateAdminSeasonPhase(data);
       populateAdminVotingSchedule(data);
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
+      populateAdminTribeList(data.tribes || []);
       populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
       populateAdminInteractionControls(data.interactions || {}, data.comments || []);
       adminLoadResultAnswerChoices(true);
@@ -6054,10 +6079,58 @@ function populateAdminCastBioList(castRows) {
   populateAdminCastBioForm();
 }
 
+function populateAdminTribeList(tribes) {
+  ADMIN_TRIBES = uniqueBy_(tribes || [], tribe => normalizeTextKey_(tribe.name));
+  const select = document.getElementById('adminTribeSelect');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">Add new tribe...</option>';
+  ADMIN_TRIBES.forEach(tribe => {
+    const option = document.createElement('option');
+    option.value = tribe.name;
+    option.textContent = tribe.name;
+    select.appendChild(option);
+  });
+  if (current && ADMIN_TRIBES.some(tribe => tribe.name === current)) select.value = current;
+  const suggestions = document.getElementById('adminTribePhotoSuggestions');
+  if (suggestions) suggestions.innerHTML = uniqueBy_(ADMIN_TRIBES.map(tribe => tribe.photoUrl).filter(Boolean), normalizeTextKey_).map(url => `<option value="${escapeAttr(url)}"></option>`).join('');
+  populateAdminTribeForm();
+  populateAdminCastSuggestions();
+}
+
+function populateAdminTribeForm() {
+  const selectedName = document.getElementById('adminTribeSelect')?.value || '';
+  const tribe = ADMIN_TRIBES.find(item => item.name === selectedName) || {};
+  document.getElementById('adminTribeName').value = tribe.name || selectedName || '';
+  document.getElementById('adminTribePhotoUrl').value = tribe.photoUrl || '';
+  setRichEditorHtml('adminTribeDescription', tribe.description || '');
+  const status = document.getElementById('adminTribeStatus');
+  if (status) status.textContent = tribe.name ? `Editing ${tribe.name}.` : 'Add a new tribe or choose one from the list.';
+}
+
+function startNewTribe() {
+  const select = document.getElementById('adminTribeSelect');
+  if (select) select.value = '';
+  document.getElementById('adminTribeName').value = '';
+  document.getElementById('adminTribePhotoUrl').value = '';
+  setRichEditorHtml('adminTribeDescription', '');
+  const status = document.getElementById('adminTribeStatus');
+  if (status) status.textContent = 'Adding a brand-new tribe.';
+}
+
+function handleAdminTribeNameInput() {
+  const name = document.getElementById('adminTribeName').value.trim();
+  const match = ADMIN_TRIBES.find(tribe => normalizeTextKey_(tribe.name) === normalizeTextKey_(name));
+  if (!match) return;
+  const select = document.getElementById('adminTribeSelect');
+  if (select) select.value = match.name;
+  populateAdminTribeForm();
+}
+
 function populateAdminCastSuggestions() {
   const suggestionMap = {
     adminCastNameSuggestions: ADMIN_CAST_BIOS.map(player => player.name),
-    adminCastTeamSuggestions: ADMIN_CAST_BIOS.map(player => player.team),
+    adminCastTeamSuggestions: ADMIN_CAST_BIOS.map(player => player.team).concat(ADMIN_TRIBES.map(tribe => tribe.name)),
     adminCastHometownSuggestions: ADMIN_CAST_BIOS.map(player => player.hometown),
     adminCastOccupationSuggestions: ADMIN_CAST_BIOS.map(player => player.occupation),
     adminCastPhotoSuggestions: ADMIN_CAST_BIOS.map(player => player.photoUrl)
@@ -6545,6 +6618,38 @@ function adminSaveCastawayBio() {
       photoUrl: document.getElementById('adminCastPhotoUrl').value,
       bio: getRichEditorHtml('adminCastBio'),
       details: getRichEditorHtml('adminCastDetails')
+    });
+}
+
+function adminSaveTribe() {
+  if (!ADMIN_PASSCODE) {
+    showModal('Admin Only', 'Unlock the Admin Tribe Council before editing tribes.');
+    return;
+  }
+  const name = document.getElementById('adminTribeName').value.trim();
+  if (!name) {
+    showModal('Missing Tribe', 'Enter a tribe name before saving.');
+    return;
+  }
+  const status = document.getElementById('adminTribeStatus');
+  if (status) status.textContent = 'Saving tribe...';
+  google.script.run
+    .withSuccessHandler(result => {
+      showModal('Tribe Saved', result.message || 'Tribe saved.');
+      populateAdminTribeList((result && result.tribes) || ADMIN_TRIBES);
+      const select = document.getElementById('adminTribeSelect');
+      if (select) select.value = name;
+      populateAdminTribeForm();
+      captureAdminSavedState();
+    })
+    .withFailureHandler(error => {
+      if (status) status.textContent = `Unable to save: ${getErrorMessage(error)}`;
+      showModal('Council Error', getErrorMessage(error));
+    })
+    .adminSaveTribe(ADMIN_PASSCODE, {
+      name,
+      photoUrl: document.getElementById('adminTribePhotoUrl').value,
+      description: getRichEditorHtml('adminTribeDescription')
     });
 }
 

@@ -4,6 +4,7 @@ const GAME_SHEETS_51 = {
   CONFIG: 'Config',
   PLAYERS: 'Players',
   CAST: 'CastStatus',
+  TRIBES: 'Tribes',
   PICKS: 'Picks',
   WEEKSCORING: 'WeekScoring',
   SCORES: 'Scores',
@@ -19,6 +20,7 @@ const GAME_HEADERS_51 = {
   CONFIG: ['Key', 'Value'],
   PLAYERS: ['Name', 'Active', 'TribalKey'],
   CAST: ['Name', 'Status', 'PhotoUrl', 'Team', 'Bio', 'Age', 'Hometown', 'Occupation', 'Details'],
+  TRIBES: ['Name', 'PhotoUrl', 'Description'],
   PICKS: [
     'Timestamp',
     'Week',
@@ -130,6 +132,7 @@ function setupSurvivorApp_FAST() {
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CONFIG, GAME_HEADERS_51.CONFIG);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PLAYERS, GAME_HEADERS_51.PLAYERS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAST, GAME_HEADERS_51.CAST);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.TRIBES, GAME_HEADERS_51.TRIBES);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.PICKS, GAME_HEADERS_51.PICKS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.WEEKSCORING, GAME_HEADERS_51.WEEKSCORING);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.SCORES, GAME_HEADERS_51.SCORES);

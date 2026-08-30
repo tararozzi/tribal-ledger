@@ -1108,9 +1108,11 @@ body {
   order: 99;
 }
 
-#adminCastBioSection {
+#adminTribeSection {
   order: 100;
 }
+
+#adminCastBioSection { order: 101; }
 
 .section {
   display: none;

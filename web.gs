@@ -2,6 +2,7 @@ const APP_SHEETS_51 = {
   CONFIG: GAME_SHEETS_51.CONFIG,
   PLAYERS: GAME_SHEETS_51.PLAYERS,
   CAST: GAME_SHEETS_51.CAST,
+  TRIBES: GAME_SHEETS_51.TRIBES,
   PICKS: GAME_SHEETS_51.PICKS,
   SCORES: GAME_SHEETS_51.SCORES,
   RECAPS: GAME_SHEETS_51.WEEKRECAPS,
@@ -194,6 +195,7 @@ function getVercelRpcHandlers_() {
     adminPinComment,
     adminRecalculateScores,
     adminSaveCastawayBio,
+    adminSaveTribe,
     adminSaveContentBlocks,
     adminSaveCurrentWeek,
     adminSaveVotingSchedule,
@@ -320,6 +322,19 @@ function getAppData() {
 
 function getCastBioRows_() {
   return getCastGrid_(readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CAST)));
+}
+
+function getTribeRows_() {
+  const ss = SpreadsheetApp.getActive();
+  ensureSheetWithHeaders_(ss, APP_SHEETS_51.TRIBES, GAME_HEADERS_51.TRIBES);
+  return readTable_(mustGetSheet_(ss, APP_SHEETS_51.TRIBES))
+    .map(row => ({
+      name: String(row.Name || '').trim(),
+      photoUrl: String(row.PhotoUrl || '').trim(),
+      description: sanitizeHtml_(String(row.Description || '').trim())
+    }))
+    .filter(tribe => tribe.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function getInteractionConfig_(config) {
@@ -1038,6 +1053,7 @@ function getAdminDashboard(passcode) {
     scoresSummary: getScoresSummary_(),
     contentBlocks: getAdminContentBlocks(passcode),
     castBios: getCastBioRows_(),
+    tribes: getTribeRows_(),
     interactions: getInteractionConfig_(config),
     comments: getAdminComments_()
   };
@@ -1104,6 +1120,27 @@ function adminSaveSeasonPhase(passcode, payload) {
   SpreadsheetApp.flush();
 
   return { ok: true, message: mode === 'MANUAL' ? 'Season phase override saved.' : 'Season phase automation saved.' };
+}
+
+function adminSaveTribe(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const ss = SpreadsheetApp.getActive();
+  ensureSheetWithHeaders_(ss, APP_SHEETS_51.TRIBES, GAME_HEADERS_51.TRIBES);
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.TRIBES);
+  const headers = getHeaders_(sheet);
+  const rows = readTable_(sheet);
+  const name = String((payload && payload.name) || '').trim();
+  if (!name) throw new Error('Tribe name is required.');
+  const record = {
+    Name: name,
+    PhotoUrl: String((payload && payload.photoUrl) || '').trim(),
+    Description: sanitizeHtml_(String((payload && payload.description) || '').trim())
+  };
+  const existingIndex = rows.findIndex(row => normalizeTextKey51_(row.Name) === normalizeTextKey51_(name));
+  const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+  if (existingIndex >= 0) sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
+  else sheet.appendRow(values);
+  return { ok: true, message: `${name} tribe saved.`, tribes: getTribeRows_() };
 }
 
 function adminSetVotingOpen(passcode, isOpen) {
