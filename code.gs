@@ -237,6 +237,7 @@ function seedAppConfigIfMissing_() {
     PhotoUploadTitle: 'Tribe Snapshots',
     PhotoUploadInstructions: 'Drop your Survivor-themed photo here for the tribe.',
     PhotoDriveFolderId: '',
+    AdminChangeLogSpreadsheetId: '',
     InteractionsEnabled: 'TRUE',
     CommentsEnabled: 'TRUE',
     Team1Name: '',
@@ -575,6 +576,8 @@ function addOrUpdateBonusRow_(week, player, points, reason) {
   } else {
     sheet.appendRow(values);
   }
+
+  logAdminChange51_({ action: 'Save Results', section: 'Scoring', record: `Week ${week} correct answers`, previousValue: rowNumber ? rows[rowNumber - 2] : '', newValue: record, week });
 }
 
 /* =========================
@@ -646,7 +649,9 @@ function adminSaveResults(passcode, payload) {
 
 function adminRecalculateScores(passcode) {
   verifyAdminPasscodeOrThrow_(passcode);
-  return recalculateScores();
+  const result = recalculateScores();
+  logAdminChange51_({ action: 'Recalculate Scores', section: 'Scoring', record: 'All player scores', previousValue: 'Existing calculated scores', newValue: 'Recalculated from saved results' });
+  return result;
 }
 
 // Private diagnostic helper. The trailing underscore prevents invocation through
@@ -657,7 +662,10 @@ function adminRecalculateScoresTrialRun_() {
 
 function adminAdvanceWeek(passcode) {
   verifyAdminPasscodeOrThrow_(passcode);
-  return advanceWeek_();
+  const previousWeek = Number(readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), GAME_SHEETS_51.CONFIG)).WeekNumber || 1);
+  const result = advanceWeek_();
+  logAdminChange51_({ action: 'Advance Week', section: 'Voting', record: 'Current Week', previousValue: previousWeek, newValue: previousWeek + 1, week: previousWeek + 1 });
+  return result;
 }
 
 // Private diagnostic helper; advancing the week must not be a public RPC.
@@ -687,6 +695,7 @@ function adminAddBonus(passcode, payload) {
   if (!reason) throw new Error('Missing reason.');
 
   addOrUpdateBonusRow_(week, player, points, reason);
+  logAdminChange51_({ action: 'Save Bonus', section: 'Bonus Points', record: reason, previousValue: '', newValue: `${points} points`, week, player });
   return { ok: true, message: 'Bonus points saved.' };
 }
 
@@ -742,6 +751,8 @@ function uploadTribePhoto(passcode, payload) {
     'TRUE'
   ]);
 
+  logAdminChange51_({ action: 'Upload Photo', section: 'Recap', record: fileName, newValue: 'Photo uploaded', week, player: name });
+
   return {
     ok: true,
     message: 'Admin snapshot has been added to camp.',
@@ -752,6 +763,37 @@ function uploadTribePhoto(passcode, payload) {
 /* =========================
    SHARED HELPERS
 ========================= */
+
+const ADMIN_CHANGE_LOG_HEADERS_51 = ['Timestamp', 'Admin Action', 'Admin Section', 'Record or Setting', 'Previous Value', 'New Value', 'Affected Week', 'Affected Player', 'Status'];
+
+function logAdminChange51_(entry) {
+  try {
+    const mainSs = SpreadsheetApp.getActive();
+    const configSheet = mustGetSheet_(mainSs, GAME_SHEETS_51.CONFIG);
+    const config = readConfig_(configSheet);
+    const timezone = String(config.Timezone || 'America/Los_Angeles');
+    let logId = String(config.AdminChangeLogSpreadsheetId || '').trim();
+    let logSs = null;
+    if (logId) { try { logSs = SpreadsheetApp.openById(logId); } catch (ignored) { logSs = null; } }
+    if (!logSs) { logSs = SpreadsheetApp.create('Tribal Ledger Admin Change Log'); setConfigValue_(configSheet, 'AdminChangeLogSpreadsheetId', logSs.getId()); }
+    const now = new Date();
+    const tabName = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+    let sheet = logSs.getSheetByName(tabName);
+    if (!sheet) {
+      sheet = logSs.insertSheet(tabName);
+      sheet.getRange(1, 1, 1, ADMIN_CHANGE_LOG_HEADERS_51.length).setValues([ADMIN_CHANGE_LOG_HEADERS_51]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+      const defaultSheet = logSs.getSheetByName('Sheet1');
+      if (defaultSheet && logSs.getSheets().length > 1 && defaultSheet.getLastRow() === 0) logSs.deleteSheet(defaultSheet);
+    }
+    sheet.insertRowAfter(1);
+    const safe = value => String(value === null || value === undefined ? '' : (typeof value === 'string' ? value : JSON.stringify(value))).replace(/\s+/g, ' ').slice(0, 5000);
+    const sensitive = /password|passcode|tribal\s*key|drive\s*(folder\s*)?id/i.test(`${entry.record || ''} ${entry.action || ''}`);
+    sheet.getRange(2, 1, 1, ADMIN_CHANGE_LOG_HEADERS_51.length).setValues([[Utilities.formatDate(now, timezone, 'yyyy-MM-dd HH:mm:ss'), safe(entry.action), safe(entry.section), safe(entry.record), sensitive ? 'Protected value' : safe(entry.previousValue), sensitive ? 'Updated (value hidden)' : safe(entry.newValue), safe(entry.week), safe(entry.player), safe(entry.status || 'Success')]]);
+    if (!sheet.getFilter()) sheet.getRange(1, 1, Math.max(2, sheet.getLastRow()), ADMIN_CHANGE_LOG_HEADERS_51.length).createFilter();
+    sheet.autoResizeColumns(1, ADMIN_CHANGE_LOG_HEADERS_51.length);
+  } catch (ignored) { console.warn('Admin change logging failed; the original Admin update was preserved.'); }
+}
 
 function ensureSheetWithHeaders_(ss, sheetName, headers) {
   if (!sheetName) throw new Error('Missing sheet name while ensuring headers.');

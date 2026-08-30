@@ -802,6 +802,8 @@ function adminEditSubmission(passcode, payload) {
 
     upsertPickRecord_(payload, { allowAdminEdit: true, markAutoAssigned: String(payload.AutoAssigned) === 'TRUE' });
 
+    logAdminChange51_({ action: 'Edit Submission', section: 'Picks', record: `Week ${payload.week} submission`, newValue: 'Submission updated by Admin', week: payload.week, player: payload.name });
+
     return {
       ok: true,
       message: 'Submission updated by admin.'
@@ -1058,6 +1060,7 @@ function getAdminDashboard(passcode) {
     contentBlocks: getAdminContentBlocks(passcode),
     castBios: getCastBioRows_(),
     tribes: getTribeRows_(),
+    systemStatus: getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase),
     interactions: getInteractionConfig_(config),
     comments: getAdminComments_()
   };
@@ -1071,6 +1074,29 @@ function getAdminPlayerPasskey(passcode, playerName) {
     .find(row => normalizeTextKey51_(row.Name) === normalizeTextKey51_(requestedName));
   if (!player) throw new Error('Player not found in the Players spreadsheet.');
   return { name: String(player.Name || requestedName).trim(), passkey: String(player.TribalKey || '').trim() };
+}
+
+function getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) {
+  const configItems = [
+    ['Season', config.SeasonName || 'Not set'], ['Current Week', config.WeekNumber || 'Not set'],
+    ['Season Phase', (seasonPhase && seasonPhase.label) || 'Not set'], ['Phase Mode', config.SeasonPhaseMode || 'AUTO'],
+    ['Merge Week', config.MergeWeek || 'Not set'], ['Final Week', config.FinalWeek || 'Not set'], ['Timezone', config.Timezone || 'Not set'],
+    ['Voting Mode', config.VotingOpen || 'AUTO'], ['Voting Opens', `${config.OpenDay || 'Not set'} ${config.OpenTime || ''}`.trim()],
+    ['Voting Deadline', `${config.CloseDay || 'Not set'} ${config.CloseTime || ''}`.trim()],
+    ['Picks Reveal', `${config.RevealDay || config.EpisodeDay || 'Not set'} ${config.RevealTime || config.EpisodeTime || ''}`.trim()],
+    ['Current Voting Status', (voting && voting.statusText) || 'Unknown'], ['Current Reveal Status', reveal && reveal.isVisible ? 'Public' : 'Hidden'],
+    ['Entry Fee', `$${normalizeEntryFeeAmount_(config.EntryFeeAmount)}`],
+    ['Reactions', String(config.InteractionsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
+    ['Comments', String(config.CommentsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
+    ['Admin Password', String(config.AdminPasscode || '').trim() ? 'Configured' : 'Needs attention'],
+    ['Photo Storage', String(config.PhotoDriveFolderId || '').trim() ? 'Configured' : 'Needs attention']
+  ].map(([label, value]) => ({ label, value: String(value) }));
+  const requiredSheets = Object.keys(APP_SHEETS_51).map(key => APP_SHEETS_51[key]).filter((name, index, all) => name && all.indexOf(name) === index);
+  const sheets = requiredSheets.map(name => {
+    const sheet = ss.getSheetByName(name);
+    return { name, ok: !!sheet, rows: sheet ? Math.max(0, sheet.getLastRow() - 1) : 0 };
+  });
+  return { configItems, sheets, healthy: sheets.every(item => item.ok) };
 }
 
 function adminUpdatePlayerCredentials(passcode, payload) {
@@ -1100,6 +1126,7 @@ function adminUpdatePlayerCredentials(passcode, payload) {
         .forEach(([sheetName, field]) => updatePlayerNameInSheet51_(ss, sheetName, field, originalName, newName));
     }
     SpreadsheetApp.flush();
+    logAdminChange51_({ action: 'Update Player Credentials', section: 'Player Credentials', record: 'Castaway Name and Tribal Key', previousValue: { name: originalName, tribalKey: 'Protected value' }, newValue: { name: newName, tribalKey: 'Updated' }, player: newName });
     return { ok: true, name: newName, message: originalName === newName ? `${newName}'s Tribal Key was updated.` : `${originalName} was renamed to ${newName} and all related records were updated.`, playerNames: readTable_(sheet).map(row => String(row.Name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)) };
   } finally {
     lock.releaseLock();
@@ -1161,7 +1188,7 @@ function adminSaveCastawayBio(passcode, payload) {
 
   return {
     ok: true,
-    message: `${name} castaway bio saved.`,
+    message: (logAdminChange51_({ action: 'Save Castaway Bio', section: 'Castaway Bios', record: name, previousValue: rowNumber ? rows[rowNumber - 2] : '', newValue: record, player: name }), `${name} castaway bio saved.`),
     castBios: getCastBioRows_()
   };
 }
@@ -1179,7 +1206,7 @@ function adminSaveSeasonPhase(passcode, payload) {
   if (Number.isFinite(mergeWeek) && mergeWeek > 0) setConfigValue_(configSheet, 'MergeWeek', mergeWeek);
   if (Number.isFinite(finalWeek) && finalWeek > 0) setConfigValue_(configSheet, 'FinalWeek', finalWeek);
   SpreadsheetApp.flush();
-
+  logAdminChange51_({ action: 'Save Season Phase', section: 'Season', record: 'Season phase controls', newValue: { mode, manualPhase, mergeWeek, finalWeek } });
   return { ok: true, message: mode === 'MANUAL' ? 'Season phase override saved.' : 'Season phase automation saved.' };
 }
 
@@ -1201,6 +1228,7 @@ function adminSaveTribe(passcode, payload) {
   const values = headers.map(header => record[header] !== undefined ? record[header] : '');
   if (existingIndex >= 0) sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
   else sheet.appendRow(values);
+  logAdminChange51_({ action: 'Save Tribe', section: 'Tribes', record: name, previousValue: existingIndex >= 0 ? rows[existingIndex] : '', newValue: record });
   return { ok: true, message: `${name} tribe saved.`, tribes: getTribeRows_() };
 }
 
@@ -1208,6 +1236,7 @@ function adminSetVotingOpen(passcode, isOpen) {
   verifyAdminPasscodeOrThrow_(passcode);
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'VotingOpen', isOpen ? 'TRUE' : 'FALSE');
+  logAdminChange51_({ action: isOpen ? 'Open Voting' : 'Close Voting', section: 'Voting', record: 'VotingOpen', newValue: isOpen ? 'TRUE' : 'FALSE' });
   return { ok: true, message: isOpen ? 'Voting is now OPEN.' : 'Voting is now CLOSED.' };
 }
 
@@ -1218,6 +1247,7 @@ function adminSaveCurrentWeek(passcode, week) {
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'WeekNumber', targetWeek);
   SpreadsheetApp.flush();
+  logAdminChange51_({ action: 'Save Current Week', section: 'Voting', record: 'WeekNumber', newValue: targetWeek, week: targetWeek });
   return { ok: true, weekNumber: targetWeek, message: `Current week updated to Week ${targetWeek}.` };
 }
 
@@ -1245,6 +1275,7 @@ function adminSaveVotingSchedule(passcode, payload) {
   setConfigValue_(configSheet, 'RevealTime', formatTimeForConfig_(revealTime));
   setConfigValue_(configSheet, 'VotingOpen', 'AUTO');
   SpreadsheetApp.flush();
+  logAdminChange51_({ action: 'Save Voting Schedule', section: 'Voting', record: 'Open, deadline, and reveal schedule', newValue: { openDay, openTime, closeDay, closeTime, revealDay, revealTime } });
   return { ok: true, message: 'Voting open, deadline, and picks reveal schedule saved. Automatic scheduling is active.' };
 }
 
@@ -1283,6 +1314,8 @@ function adminSaveRecap(passcode, payload) {
     sheet.appendRow(values);
   }
 
+  logAdminChange51_({ action: 'Save Recap', section: 'Recap', record: record.Title, previousValue: rowNumber ? rows[rowNumber - 2] : '', newValue: record, week });
+
   return { ok: true, message: `Week ${week} recap saved.` };
 }
 
@@ -1305,6 +1338,8 @@ function adminSendPlayerUpdateEmail(passcode, week) {
     htmlBody: email.htmlBody,
     name: 'The Tribal Ledger'
   });
+
+  logAdminChange51_({ action: 'Send Player Update Email', section: 'Recap', record: 'Player update email', newValue: `Sent to ${email.recipients.length} configured recipients`, week });
 
   return {
     ok: true,
@@ -1787,6 +1822,7 @@ function adminSaveContentBlocks(passcode, payload) {
   setConfigValue_(configSheet, 'AtAGlance9', sanitizeHtml_(String(payload.atAGlance9 || '').trim()));
   setConfigValue_(configSheet, 'AtAGlance10', sanitizeHtml_(String(payload.atAGlance10 || '').trim()));
 
+  logAdminChange51_({ action: 'Save Questions and Camp Content', section: 'Questions / Camp Content', record: `Week ${questionWeek}`, newValue: 'Questions, options, and camp content updated', week: questionWeek });
   return { ok: true, week: questionWeek, message: `Week ${questionWeek} questions and camp content updated.` };
 }
 
@@ -2270,12 +2306,14 @@ function adminSaveInteractionSettings(passcode, payload) {
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'InteractionsEnabled', payload && payload.reactionsEnabled ? 'TRUE' : 'FALSE');
   setConfigValue_(configSheet, 'CommentsEnabled', payload && payload.commentsEnabled ? 'TRUE' : 'FALSE');
+  logAdminChange51_({ action: 'Save Interaction Settings', section: 'Interactions', record: 'Comments and reactions', newValue: { reactionsEnabled: !!(payload && payload.reactionsEnabled), commentsEnabled: !!(payload && payload.commentsEnabled) } });
   return { ok: true, message: 'Interaction settings saved.' };
 }
 
 function adminDeleteComment(passcode, commentId) {
   verifyAdminPasscodeOrThrow_(passcode);
   updateCommentAdminFlag_(commentId, 'Deleted', 'TRUE');
+  logAdminChange51_({ action: 'Delete Comment', section: 'Interactions', record: commentId, previousValue: 'Visible', newValue: 'Deleted' });
   return { ok: true, message: 'Comment deleted.', comments: getAdminComments_() };
 }
 
@@ -2283,6 +2321,7 @@ function adminPinComment(passcode, commentId, pinned) {
   verifyAdminPasscodeOrThrow_(passcode);
   if (pinned) unpinOtherCommentsForSameWeek_(commentId);
   updateCommentAdminFlag_(commentId, 'Pinned', pinned ? 'TRUE' : 'FALSE');
+  logAdminChange51_({ action: pinned ? 'Pin Comment' : 'Unpin Comment', section: 'Interactions', record: commentId, previousValue: !pinned, newValue: pinned });
   return { ok: true, message: pinned ? 'Comment pinned.' : 'Comment unpinned.', comments: getAdminComments_() };
 }
 
