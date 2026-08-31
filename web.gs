@@ -1779,11 +1779,15 @@ function adminSaveContentBlocks(passcode, payload) {
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   const config = readConfig_(configSheet);
   const currentWeek = Number(config.WeekNumber || 1);
+  const section = String((payload && payload.section) || 'all').trim().toLowerCase();
+  const saveQuestions = section === 'all' || section === 'questions';
+  const saveCamp = section === 'all' || section === 'camp';
+  if (!saveQuestions && !saveCamp) throw new Error('Choose a valid admin content section.');
   const questionWeek = Number(payload.questionWeek || payload.week || currentWeek);
-  if (!questionWeek) throw new Error('Choose a valid week number.');
-  const entryFeeAmount = normalizeEntryFeeAmount_(payload.entryFeeAmount);
+  if (saveQuestions && !questionWeek) throw new Error('Choose a valid week number.');
 
-  const questionConfig = {
+  if (saveQuestions) {
+    const questionConfig = {
     Q1: cleanQuestionPrompt_(payload.q1),
     Q1Points: pointValueOrBlank_(payload.q1Points),
     Q2: cleanQuestionPrompt_(payload.q2),
@@ -1817,46 +1821,56 @@ function adminSaveContentBlocks(passcode, payload) {
     Q8Type: normalizeQuestionType_(payload.q8Type),
     Q8Options: String(payload.q8Options || '').trim(),
     CommentPromptTemplate: cleanQuestionPrompt_(payload.commentPromptTemplate)
+    };
+
+    for (let i = 1; i <= 8; i++) {
+      if (questionConfig[`Q${i}`] && !questionConfig[`Q${i}Type`]) {
+        throw new Error(`Select an Options Source for Q${i} before saving.`);
+      }
+      if (!questionConfig[`Q${i}`]) {
+        questionConfig[`Q${i}Type`] = '';
+        questionConfig[`Q${i}Options`] = '';
+        questionConfig[`Q${i}Points`] = '';
+      }
+    }
+
+    upsertQuestionWeekConfig_(questionWeek, questionConfig);
+
+    if (questionWeek === currentWeek) {
+      Object.keys(questionConfig).forEach(key => setConfigValue_(configSheet, key, questionConfig[key]));
+    }
+  }
+
+  if (saveCamp) {
+    setConfigValue_(configSheet, 'CampAnnouncementsTitle', sanitizeHtml_(String(payload.campAnnouncementsTitle || '').trim()));
+    setConfigValue_(configSheet, 'EntryFeeAmount', normalizeEntryFeeAmount_(payload.entryFeeAmount));
+    setConfigValue_(configSheet, 'CampAnnouncement1', sanitizeHtml_(String(payload.campAnnouncement1 || '').trim()));
+    setConfigValue_(configSheet, 'CampAnnouncement2', sanitizeHtml_(String(payload.campAnnouncement2 || '').trim()));
+    setConfigValue_(configSheet, 'CampAnnouncement3', sanitizeHtml_(String(payload.campAnnouncement3 || '').trim()));
+    setConfigValue_(configSheet, 'CampAnnouncement4', sanitizeHtml_(String(payload.campAnnouncement4 || '').trim()));
+    setConfigValue_(configSheet, 'CampAnnouncement5', sanitizeHtml_(String(payload.campAnnouncement5 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlanceTitle', sanitizeHtml_(String(payload.atAGlanceTitle || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance1', sanitizeHtml_(String(payload.atAGlance1 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance2', sanitizeHtml_(String(payload.atAGlance2 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance3', sanitizeHtml_(String(payload.atAGlance3 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance4', sanitizeHtml_(String(payload.atAGlance4 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance5', sanitizeHtml_(String(payload.atAGlance5 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance6', sanitizeHtml_(String(payload.atAGlance6 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance7', sanitizeHtml_(String(payload.atAGlance7 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance8', sanitizeHtml_(String(payload.atAGlance8 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance9', sanitizeHtml_(String(payload.atAGlance9 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance10', sanitizeHtml_(String(payload.atAGlance10 || '').trim()));
+  }
+
+  SpreadsheetApp.flush();
+  logAdminChange51_({ action: saveQuestions ? 'Save Voting Questions' : 'Save Camp Announcements', section: saveQuestions ? 'Voting Questions' : 'Camp Announcements', record: saveQuestions ? `Week ${questionWeek}` : 'Camp announcements', newValue: saveQuestions ? 'Questions and options updated' : 'Camp announcements updated', week: saveQuestions ? questionWeek : currentWeek });
+  return {
+    ok: true,
+    week: saveQuestions ? questionWeek : currentWeek,
+    message: saveQuestions && saveCamp
+      ? `Week ${questionWeek} questions and camp content updated.`
+      : (saveQuestions ? `Week ${questionWeek} voting questions saved.` : 'Camp announcements saved.')
   };
-
-  for (let i = 1; i <= 8; i++) {
-    if (questionConfig[`Q${i}`] && !questionConfig[`Q${i}Type`]) {
-      throw new Error(`Select an Options Source for Q${i} before saving.`);
-    }
-    if (!questionConfig[`Q${i}`]) {
-      questionConfig[`Q${i}Type`] = '';
-      questionConfig[`Q${i}Options`] = '';
-      questionConfig[`Q${i}Points`] = '';
-    }
-  }
-
-  upsertQuestionWeekConfig_(questionWeek, questionConfig);
-
-  if (questionWeek === currentWeek) {
-    Object.keys(questionConfig).forEach(key => setConfigValue_(configSheet, key, questionConfig[key]));
-  }
-
-  setConfigValue_(configSheet, 'CampAnnouncementsTitle', sanitizeHtml_(String(payload.campAnnouncementsTitle || '').trim()));
-  setConfigValue_(configSheet, 'EntryFeeAmount', entryFeeAmount);
-  setConfigValue_(configSheet, 'CampAnnouncement1', sanitizeHtml_(String(payload.campAnnouncement1 || '').trim()));
-  setConfigValue_(configSheet, 'CampAnnouncement2', sanitizeHtml_(String(payload.campAnnouncement2 || '').trim()));
-  setConfigValue_(configSheet, 'CampAnnouncement3', sanitizeHtml_(String(payload.campAnnouncement3 || '').trim()));
-  setConfigValue_(configSheet, 'CampAnnouncement4', sanitizeHtml_(String(payload.campAnnouncement4 || '').trim()));
-  setConfigValue_(configSheet, 'CampAnnouncement5', sanitizeHtml_(String(payload.campAnnouncement5 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlanceTitle', sanitizeHtml_(String(payload.atAGlanceTitle || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance1', sanitizeHtml_(String(payload.atAGlance1 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance2', sanitizeHtml_(String(payload.atAGlance2 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance3', sanitizeHtml_(String(payload.atAGlance3 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance4', sanitizeHtml_(String(payload.atAGlance4 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance5', sanitizeHtml_(String(payload.atAGlance5 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance6', sanitizeHtml_(String(payload.atAGlance6 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance7', sanitizeHtml_(String(payload.atAGlance7 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance8', sanitizeHtml_(String(payload.atAGlance8 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance9', sanitizeHtml_(String(payload.atAGlance9 || '').trim()));
-  setConfigValue_(configSheet, 'AtAGlance10', sanitizeHtml_(String(payload.atAGlance10 || '').trim()));
-
-  logAdminChange51_({ action: 'Save Questions and Camp Content', section: 'Questions / Camp Content', record: `Week ${questionWeek}`, newValue: 'Questions, options, and camp content updated', week: questionWeek });
-  return { ok: true, week: questionWeek, message: `Week ${questionWeek} questions and camp content updated.` };
 }
 
 /* =========================

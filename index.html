@@ -3747,12 +3747,12 @@ tbody tr:hover td {
             <div class="admin-section-tabs" aria-label="Admin sections">
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminVotingControls')">Voting</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminSeasonPhaseSection')">Season</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminQuestionsSection')">Questions</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminQuestionsSection')">Voting Questions</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminScoringSection')">Scoring</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminBonusSection')">Bonus</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminRecapSection')">Recap</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminInteractionsSection')">Interactions</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Content</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Announcements</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminTribeSection')">Tribes</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCastBioSection')">Castaway Bios</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminPlayerCredentialsSection')">Credentials</button>
@@ -4061,13 +4061,13 @@ tbody tr:hover td {
               </div>
 
               <div class="form-actions">
-                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks()">Save Questions</button>
+                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks('questions')">Save Voting Questions</button>
               </div>
             </div>
 
             <!-- Camp Home Content -->
             <div id="adminCampContentSection" class="card inner-card camp-content-admin-card admin-scroll-target">
-              <h3 class="section-title mini">Camp Home Content</h3>
+              <h3 class="section-title mini">Camp Announcements</h3>
               <div class="admin-grid compact-admin-grid">
                 <div>
                   <label class="admin-label" for="adminEntryFeeAmount">Entry Fee Amount ($)</label>
@@ -4235,7 +4235,7 @@ tbody tr:hover td {
               </div>
 
               <div class="form-actions">
-                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks()">Save Camp Content</button>
+                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks('camp')">Save Camp Announcements</button>
               </div>
             </div>
 
@@ -4676,6 +4676,20 @@ function getAdminFormState() {
 }
 
 function captureAdminSavedState() { ADMIN_SAVED_STATE = getAdminFormState(); }
+
+function captureAdminSectionSavedState(section) {
+  const currentState = getAdminFormState();
+  if (!currentState || !ADMIN_SAVED_STATE) {
+    ADMIN_SAVED_STATE = currentState;
+    return;
+  }
+  const isSectionField = id => section === 'questions'
+    ? id === 'adminQuestionWeek' || id === 'adminCommentPromptTemplate' || /^adminQ\d/.test(id)
+    : id === 'adminEntryFeeAmount' || id.startsWith('adminCamp') || id.startsWith('adminAtAGlance');
+  const currentById = new Map(JSON.parse(currentState).map(item => [item[0], item]));
+  const saved = JSON.parse(ADMIN_SAVED_STATE).map(item => isSectionField(item[0]) && currentById.has(item[0]) ? currentById.get(item[0]) : item);
+  ADMIN_SAVED_STATE = JSON.stringify(saved);
+}
 
 function hasUnsavedAdminChanges() {
   const currentState = getAdminFormState();
@@ -6447,26 +6461,41 @@ function adminSaveRecap() {
     });
 }
 
-function adminSaveContentBlocks() {
-  for (let i = 1; i <= 8; i++) {
-    const prompt = getRichEditorHtml(`adminQ${i}`).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim();
-    const source = document.getElementById(`adminQ${i}Type`).value;
-    if (prompt && !source) {
-      showModal('Options Source Required', `Select an Options Source for Q${i} before saving.`);
-      return;
+function adminSaveContentBlocks(section) {
+  const saveSection = section === 'camp' ? 'camp' : 'questions';
+  if (saveSection === 'questions') {
+    for (let i = 1; i <= 8; i++) {
+      const prompt = getRichEditorHtml(`adminQ${i}`).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim();
+      const source = document.getElementById(`adminQ${i}Type`).value;
+      if (prompt && !source) {
+        showModal('Options Source Required', `Select an Options Source for Q${i} before saving.`);
+        return;
+      }
     }
   }
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
-      showModal('Camp Updated', r.message || 'Camp content updated.');
-      updateAdminQuestionWeekStatus({
-        questionWeek: r.week || document.getElementById('adminQuestionWeek').value,
-        hasSavedQuestionWeek: true
-      });
+      hideLoadingTorch();
+      showModal(
+        saveSection === 'questions' ? 'Voting Questions Saved' : 'Camp Announcements Saved',
+        r.message || (saveSection === 'questions' ? 'Voting questions saved.' : 'Camp announcements saved.')
+      );
+      if (saveSection === 'questions') {
+        updateAdminQuestionWeekStatus({
+          questionWeek: r.week || document.getElementById('adminQuestionWeek').value,
+          hasSavedQuestionWeek: true
+        });
+      }
+      captureAdminSectionSavedState(saveSection);
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminSaveContentBlocks(ADMIN_PASSCODE, {
+      section: saveSection,
       questionWeek: document.getElementById('adminQuestionWeek').value,
       entryFeeAmount: document.getElementById('adminEntryFeeAmount').value,
       q1: getRichEditorHtml('adminQ1'),
