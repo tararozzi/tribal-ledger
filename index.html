@@ -4531,6 +4531,7 @@ let ADMIN_TRIBES = [];
 let ADMIN_PLAYER_NAMES = [];
 let ADMIN_UNLOCKED_PLAYER = '';
 let ADMIN_SAVED_STATE = null;
+const ADMIN_DIRTY_SECTIONS = new Set();
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
@@ -4616,6 +4617,12 @@ window.onload = () => {
   document.addEventListener('paste', handlePlainTextPaste);
   initDropZone();
   enhanceRichTextToolbars();
+  const adminPanel = document.getElementById('adminPanel');
+  ['input', 'change'].forEach(eventName => adminPanel && adminPanel.addEventListener(eventName, event => {
+    if (!event.isTrusted) return;
+    const section = event.target.closest('.admin-scroll-target');
+    ADMIN_DIRTY_SECTIONS.add(section ? section.id : 'admin');
+  }));
   loadAppData();
   setInterval(refreshVisibleReactionSelections, 30000);
 };
@@ -4640,6 +4647,7 @@ function showSection(sectionId) {
     const shouldLeave = window.confirm('You have unsaved changes in Admin. Leave without saving them?');
     if (!shouldLeave) return;
     ADMIN_SAVED_STATE = null;
+    ADMIN_DIRTY_SECTIONS.clear();
     loadAdminDashboard();
   }
 
@@ -4675,7 +4683,10 @@ function getAdminFormState() {
   }));
 }
 
-function captureAdminSavedState() { ADMIN_SAVED_STATE = getAdminFormState(); }
+function captureAdminSavedState() {
+  ADMIN_SAVED_STATE = getAdminFormState();
+  ADMIN_DIRTY_SECTIONS.clear();
+}
 
 function captureAdminSectionSavedState(section) {
   const currentState = getAdminFormState();
@@ -4689,11 +4700,11 @@ function captureAdminSectionSavedState(section) {
   const currentById = new Map(JSON.parse(currentState).map(item => [item[0], item]));
   const saved = JSON.parse(ADMIN_SAVED_STATE).map(item => isSectionField(item[0]) && currentById.has(item[0]) ? currentById.get(item[0]) : item);
   ADMIN_SAVED_STATE = JSON.stringify(saved);
+  ADMIN_DIRTY_SECTIONS.delete(section === 'questions' ? 'adminQuestionsSection' : 'adminCampContentSection');
 }
 
 function hasUnsavedAdminChanges() {
-  const currentState = getAdminFormState();
-  return ADMIN_SAVED_STATE !== null && currentState !== null && currentState !== ADMIN_SAVED_STATE;
+  return ADMIN_SAVED_STATE !== null && ADMIN_DIRTY_SECTIONS.size > 0;
 }
 
 function scrollAdminSection(sectionId) {
