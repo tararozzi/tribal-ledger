@@ -4512,7 +4512,7 @@ tbody tr:hover td {
     <div class="modal-card parchment">
       <div class="modal-title" id="modalTitle">The Tribe Has Spoken</div>
       <div class="modal-body" id="modalBody"></div>
-      <div class="form-actions center">
+      <div class="form-actions center" id="modalActions">
         <button class="btn btn-primary" type="button" onclick="closeModal()">Continue</button>
       </div>
     </div>
@@ -4644,11 +4644,13 @@ function handlePlainTextPaste(event) {
 function showSection(sectionId) {
   const activeSection = document.querySelector('.section.active');
   if (activeSection && activeSection.id === 'admin' && sectionId !== 'admin' && hasUnsavedAdminChanges()) {
-    const shouldLeave = window.confirm('You have unsaved changes in Admin. Leave without saving them?');
-    if (!shouldLeave) return;
-    ADMIN_SAVED_STATE = null;
-    ADMIN_DIRTY_SECTIONS.clear();
-    loadAdminDashboard();
+    showConfirmModal('Unsaved Admin Changes', 'You have unsaved changes in Admin. Leave without saving them?', () => {
+      ADMIN_SAVED_STATE = null;
+      ADMIN_DIRTY_SECTIONS.clear();
+      loadAdminDashboard();
+      showSection(sectionId);
+    });
+    return;
   }
 
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -5303,7 +5305,7 @@ function showCastCard(player) {
   const bio = player.bio || '<p>Bio coming soon.</p>';
   const details = player.details ? `<div class="cast-bio-extra">${player.details}</div>` : '';
   document.querySelector('#parchmentModal .modal-card')?.classList.add('cast-bio-card');
-  document.querySelector('#parchmentModal .form-actions .btn').textContent = 'Done';
+  resetModalActions('Done');
   document.getElementById('modalTitle').textContent = player.name || 'Castaway';
   document.getElementById('modalBody').innerHTML = `
     <div class="cast-bio-modal">
@@ -7007,10 +7009,29 @@ function uploadPhoto() {
 
 function showModal(title, message) {
   document.querySelector('#parchmentModal .modal-card')?.classList.remove('cast-bio-card');
-  document.querySelector('#parchmentModal .form-actions .btn').textContent = 'Continue';
+  resetModalActions('Continue');
   document.getElementById('modalTitle').textContent = title || 'Notice';
   document.getElementById('modalBody').innerHTML = `<p>${escapeHtml(message || '')}</p>`;
   document.getElementById('parchmentModal').classList.remove('hidden');
+}
+
+function resetModalActions(label) {
+  const actions = document.getElementById('modalActions');
+  if (actions) actions.innerHTML = `<button class="btn btn-primary" type="button">${escapeHtml(label || 'Continue')}</button>`;
+  actions?.querySelector('button')?.addEventListener('click', closeModal);
+}
+
+function showConfirmModal(title, message, onConfirm) {
+  showModal(title, message);
+  const actions = document.getElementById('modalActions');
+  if (!actions) return;
+  actions.innerHTML = '<button class="btn btn-secondary" type="button">Stay in Admin</button><button class="btn btn-primary" type="button">Leave Without Saving</button>';
+  const buttons = actions.querySelectorAll('button');
+  buttons[0].addEventListener('click', closeModal);
+  buttons[1].addEventListener('click', () => {
+    closeModal();
+    if (typeof onConfirm === 'function') onConfirm();
+  });
 }
 
 function closeModal() {
