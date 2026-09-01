@@ -664,7 +664,7 @@ function adminRecalculateScoresTrialRun_() {
 }
 
 function adminAdvanceWeek(passcode) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const previousWeek = Number(readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), GAME_SHEETS_51.CONFIG)).WeekNumber || 1);
   const result = advanceWeek_();
   logAdminChange51_({ action: 'Advance Week', section: 'Voting', record: 'Current Week', previousValue: previousWeek, newValue: previousWeek + 1, week: previousWeek + 1 });

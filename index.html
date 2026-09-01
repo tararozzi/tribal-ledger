@@ -4322,7 +4322,7 @@ tbody tr:hover td {
               <div class="form-actions">
                 <button class="btn btn-primary" type="button" onclick="adminSaveResults()">Save Weekly Results</button>
                 <button class="btn btn-secondary" type="button" onclick="adminRecalculateScores()">Recalculate Scores</button>
-                <button class="btn btn-secondary" type="button" onclick="adminAdvanceWeek()">Advance to Next Week</button>
+                <button class="btn btn-secondary" type="button" data-master-admin-only="true" onclick="adminAdvanceWeek()">Advance to Next Week</button>
               </div>
             </div>
 
@@ -4761,6 +4761,9 @@ function applyAdminAccessRole(role) {
     button.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && (!target || !allowed.has(target[1])));
   });
   document.getElementById('adminStatusBox')?.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master');
+  document.querySelectorAll('[data-master-admin-only="true"]').forEach(control => {
+    control.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master');
+  });
 }
 
 function showLoadingTorch() {
