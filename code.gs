@@ -184,6 +184,8 @@ function seedAppConfigIfMissing_() {
     EpisodeDay: 'Wednesday',
     EpisodeTime: '8:00 PM',
     AdminPasscode: '',
+    MasterAdminPasscode: '',
+    LimitedAdminPasscodes: '',
     AdminEmail: Session.getActiveUser().getEmail() || '',
     Q1: '',
     Q1Points: 5,
@@ -714,7 +716,7 @@ function verifyAdminPasscodeOrThrow_(passcode) {
 ========================= */
 
 function uploadTribePhoto(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
 
   const ss = SpreadsheetApp.getActive();
   const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));

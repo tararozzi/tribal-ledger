@@ -241,6 +241,7 @@ function getAppData() {
   const ss = SpreadsheetApp.getActive();
   const configSheet = mustGetSheet_(ss, APP_SHEETS_51.CONFIG);
   const config = readConfig_(configSheet);
+  ensureAdminAccessConfig51_(configSheet, config);
   applyNoonCampPicksMigration51_(configSheet, config);
   applyGoLiveRosterReset51_(ss, configSheet, config);
   const castRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAST));
@@ -822,7 +823,7 @@ function getSubmissionSuccessMessage_(phase) {
 }
 
 function adminEditSubmission(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   validateSubmissionPayload_(payload, true);
 
   const lock = LockService.getDocumentLock();
@@ -1053,8 +1054,38 @@ function verifyPlayerTribalKeyOrThrow_(players, name, tribalKey) {
 
 function verifyAdminPasscode(passcode) {
   const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
-  const actual = String(config.AdminPasscode || '').trim();
-  return !!actual && String(passcode || '').trim() === actual;
+  return getAdminAccessRole51_(passcode, config) || false;
+}
+
+function getAdminAccessRole51_(passcode, config) {
+  const entered = String(passcode || '').trim();
+  if (!entered) return '';
+  const master = String(config.MasterAdminPasscode || config.AdminPasscode || '').trim();
+  if (master && entered === master) return 'master';
+  const limited = Object.keys(config)
+    .filter(key => /^LimitedAdminPasscodes?\d*$/i.test(key) || /^AdminPasscode\d+$/i.test(key))
+    .flatMap(key => String(config[key] || '').split(/[\n,;]+/))
+    .map(value => value.trim())
+    .filter(Boolean);
+  return limited.includes(entered) ? 'limited' : '';
+}
+
+function ensureAdminAccessConfig51_(configSheet, config) {
+  if (!Object.prototype.hasOwnProperty.call(config, 'MasterAdminPasscode')) {
+    setConfigValue_(configSheet, 'MasterAdminPasscode', String(config.AdminPasscode || '').trim());
+    config.MasterAdminPasscode = String(config.AdminPasscode || '').trim();
+  }
+  if (!Object.keys(config).some(key => /^LimitedAdminPasscodes?\d*$/i.test(key))) {
+    setConfigValue_(configSheet, 'LimitedAdminPasscodes', '');
+    config.LimitedAdminPasscodes = '';
+  }
+}
+
+function verifyMasterAdminPasscodeOrThrow_(passcode) {
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  if (getAdminAccessRole51_(passcode, config) !== 'master') {
+    throw new Error('MASTER Admin access is required for this section.');
+  }
 }
 
 function getAdminDashboard(passcode) {
@@ -1062,6 +1093,7 @@ function getAdminDashboard(passcode) {
 
   const ss = SpreadsheetApp.getActive();
   const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const accessRole = getAdminAccessRole51_(passcode, config);
   const timezone = String(config.Timezone || 'America/Los_Angeles');
   const voting = getVotingStatus_(config, timezone);
   const reveal = getRevealStatus_(config, timezone);
@@ -1072,6 +1104,7 @@ function getAdminDashboard(passcode) {
   const playerNames = readTable_(mustGetSheet_(ss, APP_SHEETS_51.PLAYERS)).map(row => String(row.Name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b));
 
   return {
+    accessRole,
     weekNumber,
     playerNames,
     finalWeek,
@@ -1091,16 +1124,16 @@ function getAdminDashboard(passcode) {
     latestRecapTitle: recap.title || '',
     scoresSummary: getScoresSummary_(),
     contentBlocks: getAdminContentBlocks(passcode),
-    castBios: getCastBioRows_(),
-    tribes: getTribeRows_(),
-    systemStatus: getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase),
-    interactions: getInteractionConfig_(config),
-    comments: getAdminComments_()
+    castBios: accessRole === 'master' ? getCastBioRows_() : [],
+    tribes: accessRole === 'master' ? getTribeRows_() : [],
+    systemStatus: accessRole === 'master' ? getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) : null,
+    interactions: accessRole === 'master' ? getInteractionConfig_(config) : null,
+    comments: accessRole === 'master' ? getAdminComments_() : []
   };
 }
 
 function getAdminPlayerPasskey(passcode, playerName) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const requestedName = String(playerName || '').trim();
   if (!requestedName) throw new Error('Choose a player.');
   const player = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
@@ -1121,7 +1154,8 @@ function getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) {
     ['Entry Fee', `$${normalizeEntryFeeAmount_(config.EntryFeeAmount)}`],
     ['Reactions', String(config.InteractionsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
     ['Comments', String(config.CommentsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
-    ['Admin Password', String(config.AdminPasscode || '').trim() ? 'Configured' : 'Needs attention'],
+    ['MASTER Admin Password', String(config.MasterAdminPasscode || config.AdminPasscode || '').trim() ? 'Configured' : 'Needs attention'],
+    ['Limited Admin Passwords', Object.keys(config).filter(key => /^LimitedAdminPasscodes?\d*$/i.test(key) || /^AdminPasscode\d+$/i.test(key)).flatMap(key => String(config[key] || '').split(/[\n,;]+/)).filter(value => value.trim()).length + ' configured'],
     ['Photo Storage', String(config.PhotoDriveFolderId || '').trim() ? 'Configured' : 'Needs attention']
   ].map(([label, value]) => ({ label, value: String(value) }));
   const requiredSheets = Object.keys(APP_SHEETS_51).map(key => APP_SHEETS_51[key]).filter((name, index, all) => name && all.indexOf(name) === index);
@@ -1133,7 +1167,7 @@ function getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) {
 }
 
 function adminUpdatePlayerCredentials(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const originalName = String((payload && payload.originalName) || '').trim();
   const newName = normalizePlayerDisplayName51_((payload && payload.name) || '');
   const newKey = String((payload && payload.tribalKey) || '').trim();
@@ -1181,7 +1215,7 @@ function updatePlayerNameInSheet51_(ss, sheetName, field, originalName, newName)
 }
 
 function adminSaveCastawayBio(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
 
   const ss = SpreadsheetApp.getActive();
   ensureSheetWithHeaders_(ss, APP_SHEETS_51.CAST, GAME_HEADERS_51.CAST);
@@ -1227,7 +1261,7 @@ function adminSaveCastawayBio(passcode, payload) {
 }
 
 function adminSaveSeasonPhase(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   const mode = String((payload && payload.mode) || 'AUTO').trim().toUpperCase() === 'MANUAL' ? 'MANUAL' : 'AUTO';
   const manualPhase = normalizeSeasonPhaseKey_(payload && payload.manualPhase);
@@ -1244,7 +1278,7 @@ function adminSaveSeasonPhase(passcode, payload) {
 }
 
 function adminSaveTribe(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const ss = SpreadsheetApp.getActive();
   ensureSheetWithHeaders_(ss, APP_SHEETS_51.TRIBES, GAME_HEADERS_51.TRIBES);
   const sheet = mustGetSheet_(ss, APP_SHEETS_51.TRIBES);
@@ -1266,7 +1300,7 @@ function adminSaveTribe(passcode, payload) {
 }
 
 function adminSetVotingOpen(passcode, isOpen) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'VotingOpen', isOpen ? 'TRUE' : 'FALSE');
   logAdminChange51_({ action: isOpen ? 'Open Voting' : 'Close Voting', section: 'Voting', record: 'VotingOpen', newValue: isOpen ? 'TRUE' : 'FALSE' });
@@ -1274,7 +1308,7 @@ function adminSetVotingOpen(passcode, isOpen) {
 }
 
 function adminSaveCurrentWeek(passcode, week) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const targetWeek = Number(week || 0);
   if (!Number.isInteger(targetWeek) || targetWeek < 1) throw new Error('Enter a valid current week.');
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
@@ -1285,7 +1319,7 @@ function adminSaveCurrentWeek(passcode, week) {
 }
 
 function adminSaveVotingSchedule(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const openDay = String((payload && payload.openDay) || '').trim();
   const openTime = String((payload && payload.openTime) || '').trim();
   const closeDay = String((payload && payload.closeDay) || '').trim();
@@ -1650,7 +1684,7 @@ function getAdminContentBlocks(passcode, questionWeek) {
   const scoringRows = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), GAME_SHEETS_51.WEEKSCORING));
   const scoringRow = scoringRows.find(r => Number(r.Week || 0) === week) || null;
   const questionPoints = getQuestionPointsForWeek_(week, config, scoringRow);
-  return {
+  const blocks = {
     questionWeek: week,
     hasSavedQuestionWeek: !!savedQuestionConfig,
     q1: sanitizeHtml_(String(questionConfig.Q1 || '')),
@@ -1705,6 +1739,11 @@ function getAdminContentBlocks(passcode, questionWeek) {
     atAGlance9: sanitizeHtml_(String(config.AtAGlance9 || '')),
     atAGlance10: sanitizeHtml_(String(config.AtAGlance10 || ''))
   };
+  if (getAdminAccessRole51_(passcode, config) === 'master') return blocks;
+  Object.keys(blocks).forEach(key => {
+    if (key === 'entryFeeAmount' || key.startsWith('campAnnouncement') || key.startsWith('atAGlance')) delete blocks[key];
+  });
+  return blocks;
 }
 
 function getAdminQuestionWeek(passcode, week) {
@@ -1783,6 +1822,7 @@ function adminSaveContentBlocks(passcode, payload) {
   const saveQuestions = section === 'all' || section === 'questions';
   const saveCamp = section === 'all' || section === 'camp';
   if (!saveQuestions && !saveCamp) throw new Error('Choose a valid admin content section.');
+  if (saveCamp) verifyMasterAdminPasscodeOrThrow_(passcode);
   const questionWeek = Number(payload.questionWeek || payload.week || currentWeek);
   if (saveQuestions && !questionWeek) throw new Error('Choose a valid week number.');
 
@@ -1863,13 +1903,13 @@ function adminSaveContentBlocks(passcode, payload) {
   }
 
   SpreadsheetApp.flush();
-  logAdminChange51_({ action: saveQuestions ? 'Save Voting Questions' : 'Save Camp Announcements', section: saveQuestions ? 'Voting Questions' : 'Camp Announcements', record: saveQuestions ? `Week ${questionWeek}` : 'Camp announcements', newValue: saveQuestions ? 'Questions and options updated' : 'Camp announcements updated', week: saveQuestions ? questionWeek : currentWeek });
+  logAdminChange51_({ action: saveQuestions ? 'Save Weekly Questions' : 'Save Camp Announcements', section: saveQuestions ? 'Weekly Questions' : 'Camp Announcements', record: saveQuestions ? `Week ${questionWeek}` : 'Camp announcements', newValue: saveQuestions ? 'Questions and options updated' : 'Camp announcements updated', week: saveQuestions ? questionWeek : currentWeek });
   return {
     ok: true,
     week: saveQuestions ? questionWeek : currentWeek,
     message: saveQuestions && saveCamp
       ? `Week ${questionWeek} questions and camp content updated.`
-      : (saveQuestions ? `Week ${questionWeek} voting questions saved.` : 'Camp announcements saved.')
+      : (saveQuestions ? `Week ${questionWeek} weekly questions saved.` : 'Camp announcements saved.')
   };
 }
 
@@ -2349,7 +2389,7 @@ function getInteractionState(targetIds, sessionId) {
 }
 
 function adminSaveInteractionSettings(passcode, payload) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   const configSheet = mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG);
   setConfigValue_(configSheet, 'InteractionsEnabled', payload && payload.reactionsEnabled ? 'TRUE' : 'FALSE');
   setConfigValue_(configSheet, 'CommentsEnabled', payload && payload.commentsEnabled ? 'TRUE' : 'FALSE');
@@ -2358,14 +2398,14 @@ function adminSaveInteractionSettings(passcode, payload) {
 }
 
 function adminDeleteComment(passcode, commentId) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   updateCommentAdminFlag_(commentId, 'Deleted', 'TRUE');
   logAdminChange51_({ action: 'Delete Comment', section: 'Interactions', record: commentId, previousValue: 'Visible', newValue: 'Deleted' });
   return { ok: true, message: 'Comment deleted.', comments: getAdminComments_() };
 }
 
 function adminPinComment(passcode, commentId, pinned) {
-  verifyAdminPasscodeOrThrow_(passcode);
+  verifyMasterAdminPasscodeOrThrow_(passcode);
   if (pinned) unpinOtherCommentsForSameWeek_(commentId);
   updateCommentAdminFlag_(commentId, 'Pinned', pinned ? 'TRUE' : 'FALSE');
   logAdminChange51_({ action: pinned ? 'Pin Comment' : 'Unpin Comment', section: 'Interactions', record: commentId, previousValue: !pinned, newValue: pinned });

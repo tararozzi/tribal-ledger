@@ -3747,10 +3747,10 @@ tbody tr:hover td {
             <div class="admin-section-tabs" aria-label="Admin sections">
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminVotingControls')">Voting</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminSeasonPhaseSection')">Season</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminQuestionsSection')">Voting Questions</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminScoringSection')">Scoring</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminBonusSection')">Bonus</button>
-              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminRecapSection')">Recap</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminQuestionsSection')">Weekly Questions</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminScoringSection')">Enter Correct Answers</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminBonusSection')">Award Bonus Points</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminRecapSection')">Weekly Recap</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminInteractionsSection')">Interactions</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Announcements</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminTribeSection')">Tribes</button>
@@ -3861,7 +3861,7 @@ tbody tr:hover td {
 
             <!-- Voting Questions -->
             <div id="adminQuestionsSection" class="card inner-card admin-scroll-target">
-              <h3 class="section-title mini">Voting Questions</h3>
+              <h3 class="section-title mini">Weekly Questions</h3>
 
               <div class="admin-grid compact-admin-grid">
                 <div>
@@ -4061,7 +4061,7 @@ tbody tr:hover td {
               </div>
 
               <div class="form-actions">
-                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks('questions')">Save Voting Questions</button>
+                <button class="btn btn-primary" type="button" onclick="adminSaveContentBlocks('questions')">Save Weekly Questions</button>
               </div>
             </div>
 
@@ -4241,7 +4241,7 @@ tbody tr:hover td {
 
             <!-- Weekly Results + Scoring -->
             <div id="adminScoringSection" class="card inner-card admin-scroll-target">
-              <h3 class="section-title mini">Weekly Results + Scoring</h3>
+              <h3 class="section-title mini">Enter Correct Answers</h3>
 
               <div class="admin-grid">
                 <div>
@@ -4250,7 +4250,7 @@ tbody tr:hover td {
                 </div>
               </div>
 
-              <p class="subtle">Point values are assigned in Voting Questions. Correct answers use the choices shown to players for that week.</p>
+              <p class="subtle">Point values are assigned in Weekly Questions. Correct answers use the choices shown to players for that week.</p>
 
               <div class="admin-grid">
                 <div>
@@ -4297,7 +4297,7 @@ tbody tr:hover td {
 
             <!-- Camp Fire Bonus Points -->
             <div id="adminBonusSection" class="card inner-card admin-scroll-target">
-              <h3 class="section-title mini">Camp Fire Bonus Points</h3>
+              <h3 class="section-title mini">Award Bonus Points</h3>
 
               <div class="admin-grid">
                 <div>
@@ -4325,7 +4325,7 @@ tbody tr:hover td {
 
             <!-- Weekly Recap -->
             <div id="adminRecapSection" class="card inner-card admin-scroll-target">
-              <h3 class="section-title mini">Weekly Recap Editor</h3>
+              <h3 class="section-title mini">Weekly Recap</h3>
 
               <div class="admin-row">
                 <div>
@@ -4521,6 +4521,7 @@ tbody tr:hover td {
 <script>
 let APP_DATA = null;
 let ADMIN_PASSCODE = '';
+let ADMIN_ACCESS_ROLE = '';
 let PHOTO_DATA_URL = '';
 let PHOTO_FILE_NAME = '';
 let PHOTO_MIME_TYPE = '';
@@ -4716,6 +4717,19 @@ function scrollAdminSection(sectionId) {
     btn.classList.toggle('active', btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(sectionId));
   });
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function applyAdminAccessRole(role) {
+  ADMIN_ACCESS_ROLE = role === 'master' ? 'master' : 'limited';
+  const allowed = new Set(['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection']);
+  document.querySelectorAll('.admin-scroll-target').forEach(section => {
+    section.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && !allowed.has(section.id));
+  });
+  document.querySelectorAll('.admin-section-tab').forEach(button => {
+    const target = (button.getAttribute('onclick') || '').match(/'([^']+)'/);
+    button.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && (!target || !allowed.has(target[1])));
+  });
+  document.getElementById('adminStatusBox')?.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master');
 }
 
 function showLoadingTorch() {
@@ -5979,12 +5993,13 @@ function unlockAdmin() {
   }
 
   google.script.run
-    .withSuccessHandler(ok => {
-      if (!ok) {
+    .withSuccessHandler(role => {
+      if (!role) {
         showModal('Access Denied', 'Invalid admin passcode.');
         return;
       }
       ADMIN_PASSCODE = pass;
+      applyAdminAccessRole(role);
       document.getElementById('adminPanel').classList.remove('hidden');
       loadAdminDashboard();
     })
@@ -6022,13 +6037,15 @@ function loadAdminDashboard() {
       if (recapWeekInput && !recapWeekInput.value) recapWeekInput.value = data.weekNumber || 1;
       const recapTitleInput = document.getElementById('adminRecapTitle');
       if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
-      populateAdminSeasonPhase(data);
-      populateAdminVotingSchedule(data);
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
-      renderAdminPlayerCredentials(data.playerNames || []);
-      populateAdminTribeList(data.tribes || []);
-      populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
-      populateAdminInteractionControls(data.interactions || {}, data.comments || []);
+      if (ADMIN_ACCESS_ROLE === 'master') {
+        populateAdminSeasonPhase(data);
+        populateAdminVotingSchedule(data);
+        renderAdminPlayerCredentials(data.playerNames || []);
+        populateAdminTribeList(data.tribes || []);
+        populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
+        populateAdminInteractionControls(data.interactions || {}, data.comments || []);
+      }
       adminLoadResultAnswerChoices(true);
       populateAdminContentBlocks(data.contentBlocks || {}, true);
     })
@@ -6315,6 +6332,7 @@ function adminLoadResultAnswerChoices(captureSavedState) {
 
   google.script.run
     .withSuccessHandler(data => {
+      applyAdminAccessRole(data.accessRole || ADMIN_ACCESS_ROLE);
       populateAdminResultAnswerChoices((data && data.questions) || [], data && data.week);
       if (captureSavedState) captureAdminSavedState();
     })
@@ -6491,8 +6509,8 @@ function adminSaveContentBlocks(section) {
     .withSuccessHandler(r => {
       hideLoadingTorch();
       showModal(
-        saveSection === 'questions' ? 'Voting Questions Saved' : 'Camp Announcements Saved',
-        r.message || (saveSection === 'questions' ? 'Voting questions saved.' : 'Camp announcements saved.')
+        saveSection === 'questions' ? 'Weekly Questions Saved' : 'Camp Announcements Saved',
+        r.message || (saveSection === 'questions' ? 'Weekly questions saved.' : 'Camp announcements saved.')
       );
       if (saveSection === 'questions') {
         updateAdminQuestionWeekStatus({
