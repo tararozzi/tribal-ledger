@@ -242,6 +242,9 @@ function getAppData() {
   const configSheet = mustGetSheet_(ss, APP_SHEETS_51.CONFIG);
   const config = readConfig_(configSheet);
   ensureAdminAccessConfig51_(configSheet, config);
+  if (String(config.AdminChangeLogLocationConfigured || '').trim().toUpperCase() !== 'TRUE') {
+    ensureAdminChangeLogLocation51_(configSheet, config);
+  }
   applyNoonCampPicksMigration51_(configSheet, config);
   applyGoLiveRosterReset51_(ss, configSheet, config);
   const castRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAST));

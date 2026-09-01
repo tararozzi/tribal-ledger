@@ -241,6 +241,7 @@ function seedAppConfigIfMissing_() {
     PhotoUploadInstructions: 'Drop your Survivor-themed photo here for the tribe.',
     PhotoDriveFolderId: '',
     AdminChangeLogSpreadsheetId: '',
+    AdminChangeLogFolderId: '1C7GzvLWvXNEExDeyv-EVI--3QJ7HTVJ_',
     InteractionsEnabled: 'TRUE',
     CommentsEnabled: 'TRUE',
     Team1Name: '',
@@ -768,6 +769,42 @@ function uploadTribePhoto(passcode, payload) {
 ========================= */
 
 const ADMIN_CHANGE_LOG_HEADERS_51 = ['Timestamp', 'Admin Action', 'Admin Section', 'Record or Setting', 'Previous Value', 'New Value', 'Affected Week', 'Affected Player', 'Status'];
+const ADMIN_CHANGE_LOG_NAME_51 = 'Tribal Ledger Admin Change Log';
+const ADMIN_CHANGE_LOG_FOLDER_ID_51 = '1C7GzvLWvXNEExDeyv-EVI--3QJ7HTVJ_';
+
+function ensureAdminChangeLogLocation51_(configSheet, config) {
+  const folder = DriveApp.getFolderById(ADMIN_CHANGE_LOG_FOLDER_ID_51);
+  let logSs = null;
+  const configuredId = String(config.AdminChangeLogSpreadsheetId || '').trim();
+  if (configuredId) {
+    try { logSs = SpreadsheetApp.openById(configuredId); } catch (ignored) { logSs = null; }
+  }
+  if (!logSs) {
+    const matches = folder.getFilesByName(ADMIN_CHANGE_LOG_NAME_51);
+    while (matches.hasNext() && !logSs) {
+      const candidate = matches.next();
+      if (candidate.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+      try { logSs = SpreadsheetApp.openById(candidate.getId()); } catch (ignored) { logSs = null; }
+    }
+  }
+  if (!logSs) logSs = SpreadsheetApp.create(ADMIN_CHANGE_LOG_NAME_51);
+
+  const file = DriveApp.getFileById(logSs.getId());
+  let alreadyInFolder = false;
+  const parents = file.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getId() === ADMIN_CHANGE_LOG_FOLDER_ID_51) alreadyInFolder = true;
+  }
+  if (!alreadyInFolder) file.moveTo(folder);
+
+  setConfigValue_(configSheet, 'AdminChangeLogSpreadsheetId', logSs.getId());
+  setConfigValue_(configSheet, 'AdminChangeLogFolderId', ADMIN_CHANGE_LOG_FOLDER_ID_51);
+  setConfigValue_(configSheet, 'AdminChangeLogLocationConfigured', 'TRUE');
+  config.AdminChangeLogSpreadsheetId = logSs.getId();
+  config.AdminChangeLogFolderId = ADMIN_CHANGE_LOG_FOLDER_ID_51;
+  config.AdminChangeLogLocationConfigured = 'TRUE';
+  return logSs;
+}
 
 function logAdminChange51_(entry) {
   try {
@@ -775,10 +812,7 @@ function logAdminChange51_(entry) {
     const configSheet = mustGetSheet_(mainSs, GAME_SHEETS_51.CONFIG);
     const config = readConfig_(configSheet);
     const timezone = String(config.Timezone || 'America/Los_Angeles');
-    let logId = String(config.AdminChangeLogSpreadsheetId || '').trim();
-    let logSs = null;
-    if (logId) { try { logSs = SpreadsheetApp.openById(logId); } catch (ignored) { logSs = null; } }
-    if (!logSs) { logSs = SpreadsheetApp.create('Tribal Ledger Admin Change Log'); setConfigValue_(configSheet, 'AdminChangeLogSpreadsheetId', logSs.getId()); }
+    const logSs = ensureAdminChangeLogLocation51_(configSheet, config);
     const now = new Date();
     const tabName = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
     let sheet = logSs.getSheetByName(tabName);
