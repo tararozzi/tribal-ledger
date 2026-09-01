@@ -308,10 +308,9 @@ body {
 }
 
 .countdowns {
-  display: flex;
+  display: grid;
   gap: 14px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  width: min(100%, 720px);
   justify-self: end;
   margin-left: auto;
 }
@@ -322,7 +321,6 @@ body {
     rgba(255,255,255,0.10);
   border-radius: 8px;
   padding: 14px 18px;
-  min-width: 220px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
@@ -1116,6 +1114,37 @@ body {
 
 #adminTribeSection {
   order: 100;
+}
+
+.episode-countdown-box { padding: 18px 22px; }
+
+.main-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.main-schedule-item {
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  text-align: center;
+}
+
+.main-schedule-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f1e7cf;
+}
+
+.main-schedule-time {
+  margin-top: 6px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 #adminCastBioSection { order: 101; }
@@ -2828,6 +2857,10 @@ tbody tr:hover td {
     width: 100%;
   }
 
+  .main-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+
   .season-phase-banner {
     grid-template-columns: 1fr;
   }
@@ -3521,17 +3554,15 @@ tbody tr:hover td {
           </div>
 
           <div class="countdowns">
-            <div class="countdown-box">
-              <div class="countdown-label">Voting closes</div>
-              <div class="countdown-time" id="weekDisplay">Week --</div>
-              <div class="countdown-subtext" id="deadlineText">Loading…</div>
-              <div class="countdown-live" id="deadlineLive">--</div>
-            </div>
-
-            <div class="countdown-box">
+            <div class="countdown-box episode-countdown-box">
               <div class="countdown-label">Next episode airs</div>
               <div class="countdown-time" id="episodeLabel">Wednesday 8:00 PM</div>
               <div class="countdown-live" id="episodeLive">--</div>
+            </div>
+            <div class="main-schedule-grid" aria-label="Voting and picks schedule">
+              <div class="main-schedule-item"><div class="main-schedule-label">Voting Opens</div><div class="main-schedule-time" id="votingOpenSchedule">Loading…</div></div>
+              <div class="main-schedule-item"><div class="main-schedule-label">Voting Deadline</div><div class="main-schedule-time" id="votingDeadlineSchedule">Loading…</div></div>
+              <div class="main-schedule-item"><div class="main-schedule-label">Picks Reveal</div><div class="main-schedule-time" id="picksRevealSchedule">Loading…</div></div>
             </div>
           </div>
         </div>
@@ -4801,15 +4832,14 @@ function renderApp(data) {
 
   document.getElementById('heroTitle').textContent = phaseMessages.heroTitle || `Week ${data.weekNumber}: Welcome back to camp.`;
   document.getElementById('heroSubtitle').textContent = phaseMessages.heroSubtitle || `Voting ${data.voting.statusText.toLowerCase()}. Public picks reveal ${data.reveal.revealLabel}.`;
-  document.getElementById('weekDisplay').textContent = `Week ${data.weekNumber}`;
-  document.getElementById('deadlineText').textContent = data.voting.deadlineLabel || 'Deadline not set';
   document.getElementById('episodeLabel').textContent = data.episode.label || 'Wednesday 8:00 PM';
+  document.getElementById('votingOpenSchedule').textContent = data.voting.openLabel || 'Not set';
+  document.getElementById('votingDeadlineSchedule').textContent = data.voting.deadlineLabel || 'Not set';
+  document.getElementById('picksRevealSchedule').textContent = data.reveal.revealLabel || 'Not set';
   const campPicksDescription = document.getElementById('campPicksPublicDescription');
   if (campPicksDescription) campPicksDescription.textContent = `Public ${data.reveal.revealLabel || 'Wednesday 12:00 PM'}.`;
   const entryFeeText = document.getElementById('entryFeeAcknowledgmentText');
   if (entryFeeText) entryFeeText.textContent = `I acknowledge that I will pay the $${data.entryFeeAmount || '20'} entry fee to join the tribe this season.`;
-  const deadlineLabel = document.querySelector('.countdown-label');
-  if (deadlineLabel) deadlineLabel.textContent = phase.key === 'postfinale' ? 'Season status' : (phase.key === 'finale' ? 'Final vote closes' : 'Voting closes');
 
   renderSeasonPhaseBanner(phase);
   const votingBoardTitle = document.getElementById('votingBoardTitle');
@@ -4835,21 +4865,6 @@ function renderApp(data) {
   renderHomePhotos();
   refreshVisibleReactionSelections();
   populateAdminBonusPlayers(data.players || []);
-  if (phase.key === 'postfinale') {
-    document.getElementById('deadlineText').textContent = 'Final results posted';
-    stopCountdown('deadlineLive', 'Season complete');
-  } else if (!data.voting.isOpen) {
-    if (data.voting.isManualOverride) {
-      document.getElementById('deadlineText').textContent = '';
-      stopCountdown('deadlineLive', 'Voting is closed.');
-    } else {
-      document.getElementById('deadlineText').textContent = data.voting.openLabel || 'Opening time not set';
-      if (deadlineLabel) deadlineLabel.textContent = 'Voting opens';
-      startCountdown('deadlineLive', data.voting.openIso, 'Voting is open');
-    }
-  } else {
-    startCountdown('deadlineLive', data.voting.deadlineIso, phase.key === 'finale' ? 'Final vote locked' : 'Voting closed');
-  }
   startCountdown('episodeLive', data.episode.nextEpisodeIso, 'Now airing');
 
   let savedName = localStorage.getItem('survivor51_name') || '';
