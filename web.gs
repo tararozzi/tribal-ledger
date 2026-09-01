@@ -1063,7 +1063,7 @@ function verifyAdminPasscode(passcode) {
 function getAdminAccessRole51_(passcode, config) {
   const entered = String(passcode || '').trim();
   if (!entered) return '';
-  const master = String(config.MasterAdminPasscode || config.AdminPasscode || '').trim();
+  const master = String(config.AdminPasscode || '').trim();
   if (master && entered === master) return 'master';
   const limited = Object.keys(config)
     .filter(key => /^LimitedAdminPasscodes?\d*$/i.test(key) || /^AdminPasscode\d+$/i.test(key))
@@ -1074,10 +1074,6 @@ function getAdminAccessRole51_(passcode, config) {
 }
 
 function ensureAdminAccessConfig51_(configSheet, config) {
-  if (!Object.prototype.hasOwnProperty.call(config, 'MasterAdminPasscode')) {
-    setConfigValue_(configSheet, 'MasterAdminPasscode', String(config.AdminPasscode || '').trim());
-    config.MasterAdminPasscode = String(config.AdminPasscode || '').trim();
-  }
   if (!Object.keys(config).some(key => /^LimitedAdminPasscodes?\d*$/i.test(key))) {
     setConfigValue_(configSheet, 'LimitedAdminPasscodes', '');
     config.LimitedAdminPasscodes = '';
@@ -1157,7 +1153,7 @@ function getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) {
     ['Entry Fee', `$${normalizeEntryFeeAmount_(config.EntryFeeAmount)}`],
     ['Reactions', String(config.InteractionsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
     ['Comments', String(config.CommentsEnabled || 'TRUE').toUpperCase() === 'FALSE' ? 'Disabled' : 'Enabled'],
-    ['MASTER Admin Password', String(config.MasterAdminPasscode || config.AdminPasscode || '').trim() ? 'Configured' : 'Needs attention'],
+    ['MASTER Admin Password', String(config.AdminPasscode || '').trim() ? 'Configured' : 'Needs attention'],
     ['Limited Admin Passwords', Object.keys(config).filter(key => /^LimitedAdminPasscodes?\d*$/i.test(key) || /^AdminPasscode\d+$/i.test(key)).flatMap(key => String(config[key] || '').split(/[\n,;]+/)).filter(value => value.trim()).length + ' configured'],
     ['Photo Storage', String(config.PhotoDriveFolderId || '').trim() ? 'Configured' : 'Needs attention']
   ].map(([label, value]) => ({ label, value: String(value) }));

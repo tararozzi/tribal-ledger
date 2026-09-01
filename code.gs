@@ -184,7 +184,6 @@ function seedAppConfigIfMissing_() {
     EpisodeDay: 'Wednesday',
     EpisodeTime: '8:00 PM',
     AdminPasscode: '',
-    MasterAdminPasscode: '',
     LimitedAdminPasscodes: '',
     AdminEmail: Session.getActiveUser().getEmail() || '',
     Q1: '',
