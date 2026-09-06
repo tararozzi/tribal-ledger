@@ -312,16 +312,16 @@ function getAppData() {
       ].filter(Boolean),
       atAGlanceTitle: getCampRulesTitle_(config),
       atAGlance: [
-        sanitizeHtml_(String(config.AtAGlance1 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance2 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance3 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance4 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance5 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance6 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance7 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance8 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance9 || '').trim()),
-        sanitizeHtml_(String(config.AtAGlance10 || '').trim())
+        cleanOptionalHtml_(config.AtAGlance1),
+        cleanOptionalHtml_(config.AtAGlance2),
+        cleanOptionalHtml_(config.AtAGlance3),
+        cleanOptionalHtml_(config.AtAGlance4),
+        cleanOptionalHtml_(config.AtAGlance5),
+        cleanOptionalHtml_(config.AtAGlance6),
+        cleanOptionalHtml_(config.AtAGlance7),
+        cleanOptionalHtml_(config.AtAGlance8),
+        cleanOptionalHtml_(config.AtAGlance9),
+        cleanOptionalHtml_(config.AtAGlance10)
       ].filter(Boolean)
     },
     photoUpload: {
@@ -1902,16 +1902,16 @@ function adminSaveContentBlocks(passcode, payload) {
     setConfigValue_(configSheet, 'CampAnnouncement4', cleanOptionalHtml_(payload.campAnnouncement4));
     setConfigValue_(configSheet, 'CampAnnouncement5', cleanOptionalHtml_(payload.campAnnouncement5));
     setConfigValue_(configSheet, 'AtAGlanceTitle', sanitizeHtml_(String(payload.atAGlanceTitle || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance1', sanitizeHtml_(String(payload.atAGlance1 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance2', sanitizeHtml_(String(payload.atAGlance2 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance3', sanitizeHtml_(String(payload.atAGlance3 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance4', sanitizeHtml_(String(payload.atAGlance4 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance5', sanitizeHtml_(String(payload.atAGlance5 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance6', sanitizeHtml_(String(payload.atAGlance6 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance7', sanitizeHtml_(String(payload.atAGlance7 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance8', sanitizeHtml_(String(payload.atAGlance8 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance9', sanitizeHtml_(String(payload.atAGlance9 || '').trim()));
-    setConfigValue_(configSheet, 'AtAGlance10', sanitizeHtml_(String(payload.atAGlance10 || '').trim()));
+    setConfigValue_(configSheet, 'AtAGlance1', cleanOptionalHtml_(payload.atAGlance1));
+    setConfigValue_(configSheet, 'AtAGlance2', cleanOptionalHtml_(payload.atAGlance2));
+    setConfigValue_(configSheet, 'AtAGlance3', cleanOptionalHtml_(payload.atAGlance3));
+    setConfigValue_(configSheet, 'AtAGlance4', cleanOptionalHtml_(payload.atAGlance4));
+    setConfigValue_(configSheet, 'AtAGlance5', cleanOptionalHtml_(payload.atAGlance5));
+    setConfigValue_(configSheet, 'AtAGlance6', cleanOptionalHtml_(payload.atAGlance6));
+    setConfigValue_(configSheet, 'AtAGlance7', cleanOptionalHtml_(payload.atAGlance7));
+    setConfigValue_(configSheet, 'AtAGlance8', cleanOptionalHtml_(payload.atAGlance8));
+    setConfigValue_(configSheet, 'AtAGlance9', cleanOptionalHtml_(payload.atAGlance9));
+    setConfigValue_(configSheet, 'AtAGlance10', cleanOptionalHtml_(payload.atAGlance10));
   }
 
   SpreadsheetApp.flush();
