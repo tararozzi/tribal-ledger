@@ -3425,3 +3425,16 @@ tbody tr:hover td {
   max-width: 173px;
   padding-inline: 9px;
 }
+
+/* Shared ledger column system */
+:root { --ledger-player-column-width: 210px; --ledger-column-padding-y: 8px; --ledger-column-padding-x: 5px; }
+.season-ledger-table th, .season-ledger-table td,
+.camp-picks-table th, .camp-picks-table td { box-sizing: border-box; padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); text-align: center; vertical-align: middle; }
+.season-ledger-table .season-player-rank, .camp-picks-table .season-player-rank { width: var(--ledger-player-column-width) !important; min-width: var(--ledger-player-column-width) !important; max-width: var(--ledger-player-column-width) !important; padding-inline: 8px; text-align: left; }
+.season-ledger-table .season-player-card, .camp-picks-table .season-player-card { align-items: center; width: 100%; }
+.season-ledger-table .season-player-card strong, .camp-picks-table .season-player-card strong, .ledger-player-name, .my-picks-player { white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.season-ledger-table .season-player-card strong, .camp-picks-table .season-player-card strong { min-width: 0; }
+.my-picks-player { width: min(100%, var(--ledger-player-column-width)); }
+.season-ledger-table .ledger-question-header, .camp-picks-table .ledger-question-header, .season-ledger-table .ledger-pick-cell, .camp-picks-table .ledger-pick-cell { padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); }
+.my-pick-card { padding: var(--ledger-column-padding-y); }
+.my-pick-question, .my-pick-answer { overflow-wrap: normal; word-break: normal; hyphens: none; }

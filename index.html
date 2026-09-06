@@ -3485,7 +3485,18 @@ tbody tr:hover td {
   padding-inline: 9px;
 }
 
-  </style>
+/* Shared ledger column system */
+:root { --ledger-player-column-width: 210px; --ledger-column-padding-y: 8px; --ledger-column-padding-x: 5px; }
+.season-ledger-table th, .season-ledger-table td, .camp-picks-table th, .camp-picks-table td { box-sizing: border-box; padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); text-align: center; vertical-align: middle; }
+.season-ledger-table .season-player-rank, .camp-picks-table .season-player-rank { width: var(--ledger-player-column-width) !important; min-width: var(--ledger-player-column-width) !important; max-width: var(--ledger-player-column-width) !important; padding-inline: 8px; text-align: left; }
+.season-ledger-table .season-player-card, .camp-picks-table .season-player-card { align-items: center; width: 100%; }
+.season-ledger-table .season-player-card strong, .camp-picks-table .season-player-card strong, .ledger-player-name, .my-picks-player { white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.season-ledger-table .season-player-card strong, .camp-picks-table .season-player-card strong { min-width: 0; }
+.my-picks-player { width: min(100%, var(--ledger-player-column-width)); }
+.season-ledger-table .ledger-question-header, .camp-picks-table .ledger-question-header, .season-ledger-table .ledger-pick-cell, .camp-picks-table .ledger-pick-cell { padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); }
+.my-pick-card { padding: var(--ledger-column-padding-y); }
+.my-pick-question, .my-pick-answer { overflow-wrap: normal; word-break: normal; hyphens: none; }
+</style>
 </head>
 <body>
   <div class="embers" aria-hidden="true">
@@ -4810,6 +4821,7 @@ function loadAppData() {
 }
 
 function renderApp(data) {
+  syncLedgerPlayerColumnWidth_((data.players || []).map(player => player.name));
   const phase = data.seasonPhase || {};
   const phaseMessages = phase.messages || {};
   document.getElementById('brandTitle').textContent = `🏝️ ${data.ledgerTitle || 'The Tribal Ledger'}`;
@@ -5744,6 +5756,7 @@ function renderEliteWeekPicks(data) {
   }
 
   const columns = data.columns || [];
+  syncLedgerPlayerColumnWidth_((data.rows || []).map(row => row.name));
 
   if (!columns.length) {
     container.innerHTML = `<div class="announcement">No used questions found for Week ${data.week}.</div>`;
@@ -5860,6 +5873,20 @@ function formatOrdinalRank(rank) {
   return `${n}${suffix}`;
 }
 
+function syncLedgerPlayerColumnWidth_(additionalNames) {
+  const rosterNames = (APP_DATA && APP_DATA.players ? APP_DATA.players : []).map(player => player.name);
+  const names = rosterNames.concat(additionalNames || []).filter(Boolean);
+  const canvas = syncLedgerPlayerColumnWidth_.canvas ||
+    (syncLedgerPlayerColumnWidth_.canvas = document.createElement('canvas'));
+  const context = canvas.getContext('2d');
+  context.font = '900 16px Arial, sans-serif';
+  const longestWordWidth = names.reduce((widest, name) =>
+    String(name).trim().split(/\s+/).reduce((wordWidest, word) =>
+      Math.max(wordWidest, context.measureText(word).width), widest), 0);
+  const columnWidth = Math.max(210, Math.ceil(longestWordWidth + 128));
+  document.documentElement.style.setProperty('--ledger-player-column-width', `${columnWidth}px`);
+}
+
 function loadSeasonResponsesTable() {
   const container = document.getElementById('seasonTableContainer');
   if (!container) return;
@@ -5872,6 +5899,7 @@ function loadSeasonResponsesTable() {
       hideLoadingTorch();
       const columns = data.columns || [];
       const rows = data.rows || [];
+      syncLedgerPlayerColumnWidth_(rows.map(row => row.name));
 
       if (!columns.length || !rows.length) {
         container.innerHTML = '<div class="announcement">No season responses yet.</div>';
