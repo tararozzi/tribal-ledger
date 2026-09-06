@@ -1530,6 +1530,10 @@ select option[value=""],
   padding-left: 20px;
 }
 
+#atAGlanceList > li + li {
+  margin-top: 1rem;
+}
+
 .my-picks-card {
   background:
     radial-gradient(circle at 92% 10%, rgba(240, 184, 77, 0.2), transparent 30%),
