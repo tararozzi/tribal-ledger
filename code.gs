@@ -13,7 +13,10 @@ const GAME_SHEETS_51 = {
   PHOTOS: 'Photos',
   QUESTIONWEEKS: 'QuestionWeeks',
   REACTIONS: 'Reactions',
-  COMMENTS: 'Comments'
+  COMMENTS: 'Comments',
+  CAPTIONCONTESTS: 'CaptionContests',
+  CAPTIONS: 'CaptionSubmissions',
+  CAPTIONVOTES: 'CaptionVotes'
 };
 
 const GAME_HEADERS_51 = {
@@ -58,6 +61,9 @@ const GAME_HEADERS_51 = {
   PHOTOS: ['Timestamp', 'Week', 'Name', 'Email', 'Caption', 'PhotoUrl', 'DriveFileId', 'Approved'],
   REACTIONS: ['Timestamp', 'TargetId', 'TargetType', 'Week', 'Reaction', 'SessionId', 'Name'],
   COMMENTS: ['CommentId', 'Timestamp', 'Week', 'Name', 'Comment', 'Pinned', 'Deleted', 'ParentCommentId'],
+  CAPTIONCONTESTS: ['Week', 'PhotoUrl', 'DriveFileId', 'Points', 'SubmissionsOpen', 'VotingOpen', 'WinnerCaptionId', 'Finalized', 'UpdatedAt'],
+  CAPTIONS: ['CaptionId', 'Timestamp', 'Week', 'Name', 'Caption', 'Deleted'],
+  CAPTIONVOTES: ['Timestamp', 'Week', 'CaptionId', 'Name'],
   QUESTIONWEEKS: [
     'Week',
     'Q1', 'Q1Points', 'Q1Type', 'Q1Options',
@@ -142,6 +148,9 @@ function setupSurvivorApp_FAST() {
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.QUESTIONWEEKS, GAME_HEADERS_51.QUESTIONWEEKS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.REACTIONS, GAME_HEADERS_51.REACTIONS);
     ensureSheetWithHeaders_(ss, GAME_SHEETS_51.COMMENTS, GAME_HEADERS_51.COMMENTS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAPTIONCONTESTS, GAME_HEADERS_51.CAPTIONCONTESTS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAPTIONS, GAME_HEADERS_51.CAPTIONS);
+    ensureSheetWithHeaders_(ss, GAME_SHEETS_51.CAPTIONVOTES, GAME_HEADERS_51.CAPTIONVOTES);
 
     seedAppConfigIfMissing_();
     migrateLegacyTeamConfig_();

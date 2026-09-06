@@ -10,7 +10,10 @@ const APP_SHEETS_51 = {
   PHOTOS: GAME_SHEETS_51.PHOTOS,
   QUESTIONWEEKS: GAME_SHEETS_51.QUESTIONWEEKS,
   REACTIONS: GAME_SHEETS_51.REACTIONS,
-  COMMENTS: GAME_SHEETS_51.COMMENTS
+  COMMENTS: GAME_SHEETS_51.COMMENTS,
+  CAPTIONCONTESTS: GAME_SHEETS_51.CAPTIONCONTESTS,
+  CAPTIONS: GAME_SHEETS_51.CAPTIONS,
+  CAPTIONVOTES: GAME_SHEETS_51.CAPTIONVOTES
 };
 
 const REACTION_TYPES_51 = [
@@ -189,6 +192,9 @@ function getVercelRpcHandlers_() {
   return {
     addRecapComment,
     adminAddBonus,
+    adminFinalizeCaptionThis,
+    adminRemoveCaptionThis,
+    adminSaveCaptionThis,
     adminAdvanceWeek,
     adminDeleteComment,
     adminPinComment,
@@ -205,19 +211,23 @@ function getVercelRpcHandlers_() {
     adminSaveSeasonPhase,
     adminSetVotingOpen,
     getAdminDashboard,
+    getAdminCaptionThis,
     getAdminPlayerPasskey,
     getAdminQuestionWeek,
     getAdminResultAnswerChoices,
     getAppData,
     getAvailablePickWeeks,
     getBonusLog,
+    getCaptionThisData,
     getEliteWeekPicks,
     getInteractionState,
     getPlayerSubmission,
     getSeasonResponsesTable,
     registerPlayer,
     submitPicks,
+    submitCaptionThis,
     toggleReaction,
+    voteCaptionThis,
     uploadTribePhoto,
     verifyAdminPasscode,
     verifyInteractionPlayer
@@ -284,6 +294,7 @@ function getAppData() {
     episode,
     questions,
     leaderboard: getLeaderboardData_(),
+    captionThis: getCaptionThisDataForWeek_(currentWeek),
     recap: getLatestRecap_(config, timezone),
     weeklyUpdates: getWeeklyUpdates_(config, timezone),
     tribePhotos: getApprovedTribePhotos_(currentWeek, config, timezone),
@@ -1128,7 +1139,8 @@ function getAdminDashboard(passcode) {
     tribes: accessRole === 'master' ? getTribeRows_() : [],
     systemStatus: accessRole === 'master' ? getAdminSystemStatus51_(ss, config, voting, reveal, seasonPhase) : null,
     interactions: accessRole === 'master' ? getInteractionConfig_(config) : null,
-    comments: accessRole === 'master' ? getAdminComments_() : []
+    comments: accessRole === 'master' ? getAdminComments_() : [],
+    captionThis: getCaptionThisDataForWeek_(weekNumber)
   };
 }
 
@@ -2311,6 +2323,195 @@ function verifyInteractionPlayer(name, tribalKey) {
     .filter(player => String(player.Active || '').trim().toUpperCase() !== 'FALSE');
   const player = verifyPlayerTribalKeyOrThrow_(players, normalizePlayerDisplayName51_(name), tribalKey);
   return { ok: true, name: String(player.Name || '').trim() };
+}
+
+
+function ensureCaptionThisSheets_(ss) {
+  ensureSheetWithHeaders_(ss, APP_SHEETS_51.CAPTIONCONTESTS, GAME_HEADERS_51.CAPTIONCONTESTS);
+  ensureSheetWithHeaders_(ss, APP_SHEETS_51.CAPTIONS, GAME_HEADERS_51.CAPTIONS);
+  ensureSheetWithHeaders_(ss, APP_SHEETS_51.CAPTIONVOTES, GAME_HEADERS_51.CAPTIONVOTES);
+}
+
+function getCaptionThisData() {
+  const ss = SpreadsheetApp.getActive();
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  return getCaptionThisDataForWeek_(Number(config.WeekNumber || 1));
+}
+
+function getCaptionThisDataForWeek_(week) {
+  const ss = SpreadsheetApp.getActive();
+  ensureCaptionThisSheets_(ss);
+  const contest = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAPTIONCONTESTS))
+    .find(row => Number(row.Week || 0) === Number(week)) || {};
+  const captions = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAPTIONS))
+    .filter(row => Number(row.Week || 0) === Number(week) && String(row.Deleted || '').toUpperCase() !== 'TRUE');
+  const votes = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAPTIONVOTES))
+    .filter(row => Number(row.Week || 0) === Number(week));
+  const voteCounts = {};
+  votes.forEach(vote => {
+    const id = String(vote.CaptionId || '').trim();
+    if (id) voteCounts[id] = (voteCounts[id] || 0) + 1;
+  });
+  const winnerId = String(contest.WinnerCaptionId || '').trim();
+  const items = captions.map(row => ({
+    captionId: String(row.CaptionId || ''),
+    timestamp: row.Timestamp ? new Date(row.Timestamp).toISOString() : '',
+    name: String(row.Name || ''),
+    caption: String(row.Caption || ''),
+    votes: voteCounts[String(row.CaptionId || '')] || 0,
+    winner: winnerId && String(row.CaptionId || '') === winnerId
+  })).sort((a, b) => b.votes - a.votes || new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+  const winner = items.find(item => item.winner) || null;
+  return {
+    week: Number(week),
+    active: !!String(contest.PhotoUrl || '').trim(),
+    photoUrl: String(contest.PhotoUrl || ''),
+    points: Number(contest.Points || 0),
+    submissionsOpen: String(contest.SubmissionsOpen || '').toUpperCase() === 'TRUE' && String(contest.Finalized || '').toUpperCase() !== 'TRUE',
+    votingOpen: String(contest.VotingOpen || '').toUpperCase() === 'TRUE' && String(contest.Finalized || '').toUpperCase() !== 'TRUE',
+    finalized: String(contest.Finalized || '').toUpperCase() === 'TRUE',
+    winnerCaptionId: winnerId,
+    winner,
+    captions: items
+  };
+}
+
+function getAdminCaptionThis(passcode, week) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  return getCaptionThisDataForWeek_(Number(week || config.WeekNumber || 1));
+}
+
+function adminSaveCaptionThis(passcode, payload) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const ss = SpreadsheetApp.getActive();
+  ensureCaptionThisSheets_(ss);
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const week = Number(payload.week || config.WeekNumber || 1);
+  const points = Number(payload.points || 0);
+  if (!week) throw new Error('Choose a valid Caption This week.');
+  if (!Number.isFinite(points) || points < 0) throw new Error('Caption This points must be zero or greater.');
+
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONCONTESTS);
+  const rows = readTable_(sheet);
+  const headers = getHeaders_(sheet);
+  const existingIndex = rows.findIndex(row => Number(row.Week || 0) === week);
+  const existing = existingIndex >= 0 ? rows[existingIndex] : {};
+  let photoUrl = String(payload.photoUrl || existing.PhotoUrl || '').trim();
+  let driveFileId = String(existing.DriveFileId || '').trim();
+  const dataUrl = String(payload.dataUrl || '').trim();
+  if (dataUrl) {
+    const mimeType = String(payload.mimeType || '').trim();
+    if (!mimeType.startsWith('image/')) throw new Error('Only image uploads are allowed.');
+    const base64 = dataUrl.split(',')[1];
+    if (!base64) throw new Error('Invalid Caption This image data.');
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, sanitizeFileName_(String(payload.fileName || ('caption-this-week-' + week))));
+    const folderId = String(config.PhotoDriveFolderId || '').trim();
+    const folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
+    const file = folder.createFile(blob);
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (ignored) {}
+    driveFileId = file.getId();
+    photoUrl = 'https://lh3.googleusercontent.com/d/' + driveFileId;
+  }
+  if (!photoUrl) throw new Error('Upload a photo or enter a photo URL.');
+
+  const record = {
+    Week: week,
+    PhotoUrl: photoUrl,
+    DriveFileId: driveFileId,
+    Points: points,
+    SubmissionsOpen: payload.submissionsOpen ? 'TRUE' : 'FALSE',
+    VotingOpen: payload.votingOpen ? 'TRUE' : 'FALSE',
+    WinnerCaptionId: String(existing.WinnerCaptionId || ''),
+    Finalized: String(existing.Finalized || 'FALSE'),
+    UpdatedAt: new Date()
+  };
+  const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+  if (existingIndex >= 0) sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
+  else sheet.appendRow(values);
+  logAdminChange51_({ action: 'Save Caption This', section: 'Caption This', record: 'Week ' + week, newValue: points + ' points', week });
+  return { ok: true, message: 'Caption This contest saved.', contest: getCaptionThisDataForWeek_(week) };
+}
+
+function submitCaptionThis(week, caption, name, tribalKey) {
+  const contest = getCaptionThisDataForWeek_(week);
+  if (!contest.active || !contest.submissionsOpen) throw new Error('Caption submissions are closed.');
+  const verified = verifyInteractionPlayer(name, tribalKey);
+  const cleanCaption = String(caption || '').replace(/<[^>]*>/g, '').trim();
+  if (!cleanCaption) throw new Error('Write a caption before submitting.');
+  const ss = SpreadsheetApp.getActive();
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONS);
+  const duplicate = readTable_(sheet).find(row =>
+    Number(row.Week || 0) === Number(week) &&
+    nameKey51_(row.Name) === nameKey51_(verified.name) &&
+    String(row.Deleted || '').toUpperCase() !== 'TRUE');
+  if (duplicate) throw new Error('You already submitted a caption for this contest.');
+  sheet.appendRow(['caption-' + Date.now() + '-' + Math.floor(Math.random() * 100000), new Date(), Number(week), verified.name, cleanCaption.slice(0, 500), 'FALSE']);
+  return { ok: true, message: 'Your caption was submitted.', contest: getCaptionThisDataForWeek_(week) };
+}
+
+function voteCaptionThis(week, captionId, name, tribalKey) {
+  const contest = getCaptionThisDataForWeek_(week);
+  if (!contest.active || !contest.votingOpen) throw new Error('Caption voting is closed.');
+  const verified = verifyInteractionPlayer(name, tribalKey);
+  const cleanId = String(captionId || '').trim();
+  if (!contest.captions.some(item => item.captionId === cleanId)) throw new Error('That caption is no longer available.');
+  const ss = SpreadsheetApp.getActive();
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONVOTES);
+  const rows = readTable_(sheet);
+  const headers = getHeaders_(sheet);
+  const existingIndex = rows.findIndex(row => Number(row.Week || 0) === Number(week) && nameKey51_(row.Name) === nameKey51_(verified.name));
+  const record = { Timestamp: new Date(), Week: Number(week), CaptionId: cleanId, Name: verified.name };
+  const values = headers.map(header => record[header] !== undefined ? record[header] : '');
+  if (existingIndex >= 0) sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
+  else sheet.appendRow(values);
+  return { ok: true, message: existingIndex >= 0 ? 'Your vote was changed.' : 'Your vote was recorded.', contest: getCaptionThisDataForWeek_(week), selectedCaptionId: cleanId };
+}
+
+function adminRemoveCaptionThis(passcode, week, captionId) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const ss = SpreadsheetApp.getActive();
+  ensureCaptionThisSheets_(ss);
+  const sheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONS);
+  const rows = readTable_(sheet);
+  const headers = getHeaders_(sheet);
+  const index = rows.findIndex(row => Number(row.Week || 0) === Number(week) && String(row.CaptionId || '') === String(captionId || ''));
+  if (index < 0) throw new Error('Caption not found.');
+  const deletedColumn = headers.indexOf('Deleted') + 1;
+  sheet.getRange(index + 2, deletedColumn).setValue('TRUE');
+  logAdminChange51_({ action: 'Remove Caption', section: 'Caption This', record: String(captionId || ''), week: Number(week) });
+  return { ok: true, message: 'Caption removed.', contest: getCaptionThisDataForWeek_(week) };
+}
+
+function adminFinalizeCaptionThis(passcode, week, selectedCaptionId) {
+  verifyAdminPasscodeOrThrow_(passcode);
+  const ss = SpreadsheetApp.getActive();
+  ensureCaptionThisSheets_(ss);
+  const contest = getCaptionThisDataForWeek_(week);
+  if (!contest.captions.length) throw new Error('There are no captions to finalize.');
+  const maxVotes = Math.max.apply(null, contest.captions.map(item => item.votes));
+  const leaders = contest.captions.filter(item => item.votes === maxVotes);
+  let winner = leaders.length === 1 ? leaders[0] : leaders.find(item => item.captionId === String(selectedCaptionId || ''));
+  if (!winner) throw new Error('The vote is tied. Select one of the tied captions as the winner.');
+
+  const contestSheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONCONTESTS);
+  const rows = readTable_(contestSheet);
+  const headers = getHeaders_(contestSheet);
+  const contestIndex = rows.findIndex(row => Number(row.Week || 0) === Number(week));
+  if (contestIndex < 0) throw new Error('Caption This contest not found.');
+  const previousWinnerId = String(rows[contestIndex].WinnerCaptionId || '');
+  const previousWinner = contest.captions.find(item => item.captionId === previousWinnerId);
+  const reason = 'Caption This Winner (Week ' + Number(week) + ')';
+  if (previousWinner && nameKey51_(previousWinner.name) !== nameKey51_(winner.name)) addOrUpdateBonusRow_(week, previousWinner.name, 0, reason);
+  addOrUpdateBonusRow_(week, winner.name, contest.points, reason);
+  const updates = { WinnerCaptionId: winner.captionId, Finalized: 'TRUE', SubmissionsOpen: 'FALSE', VotingOpen: 'FALSE', UpdatedAt: new Date() };
+  Object.keys(updates).forEach(key => {
+    const col = headers.indexOf(key) + 1;
+    if (col) contestSheet.getRange(contestIndex + 2, col).setValue(updates[key]);
+  });
+  recalculateScores();
+  logAdminChange51_({ action: 'Finalize Caption This', section: 'Caption This', record: winner.caption, newValue: contest.points + ' points to ' + winner.name, week: Number(week), player: winner.name });
+  return { ok: true, message: winner.name + ' won Caption This and received ' + contest.points + ' points.', contest: getCaptionThisDataForWeek_(week) };
 }
 
 function toggleReaction(target, reactionKey, sessionId, name, tribalKey) {

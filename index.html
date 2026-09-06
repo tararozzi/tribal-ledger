@@ -3503,6 +3503,23 @@ tbody tr:hover td {
 .recap-comment-reply { background: rgba(255, 253, 247, 0.72); }
 #interactionAuthStatus { min-height: 1.4em; margin-top: 10px; color: #9a321f; font-weight: 800; }
 @media (max-width: 640px) { .recap-comment-replies { margin-left: 10px; } }
+.caption-this-section { max-width: 860px; margin: 22px auto; text-align: center; }
+.caption-this-photo-wrap { display: flex; justify-content: center; margin: 12px 0; }
+.caption-this-photo { display: block; width: min(100%, 680px); max-height: 520px; object-fit: contain; border-radius: 10px; border: 3px solid rgba(240,184,77,.68); box-shadow: 0 12px 28px rgba(47,38,28,.22); }
+.caption-this-meta { margin: 8px 0 14px; color: #705337; font-weight: 900; }
+.caption-this-winner { margin: 12px auto; padding: 14px; border: 2px solid #d89120; border-radius: 10px; background: rgba(255,224,122,.24); color: #4c3218; }
+.caption-submit-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin: 16px auto; text-align: left; }
+.caption-entries { display: grid; gap: 12px; margin-top: 18px; text-align: left; }
+.caption-entry { padding: 14px; border: 1px solid rgba(47,113,108,.24); border-radius: 10px; background: rgba(255,253,247,.9); box-shadow: 0 6px 16px rgba(47,38,28,.08); }
+.caption-entry.winner { border: 2px solid #d89120; background: rgba(255,248,218,.95); }
+.caption-winner-label { margin-bottom: 6px; color: #9a5b00; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.caption-entry-text { color: #2d2016; font-size: 1.06rem; line-height: 1.45; }
+.caption-entry-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: #31524c; }
+.caption-vote-btn { margin-top: 10px; }
+.caption-this-admin-preview img { display: block; max-width: min(100%,460px); max-height: 320px; object-fit: contain; margin: 12px auto; border-radius: 8px; }
+.admin-caption-entries { display: grid; gap: 10px; margin: 16px 0; }
+.admin-caption-entry { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid rgba(47,113,108,.22); border-radius: 8px; background: rgba(255,253,247,.78); }
+@media (max-width: 640px) { .caption-submit-form, .admin-caption-entry { grid-template-columns: 1fr; } .caption-entry-footer { align-items: flex-start; flex-direction: column; } }
 </style>
 </head>
 <body>
@@ -3621,6 +3638,11 @@ tbody tr:hover td {
           <h2 class="rankings-title" id="rankingsTitle">Current Tribe Rankings</h2>
         </div>
         <div class="top-three-wrap" id="topThreeMedals"></div>
+
+        <section id="captionThisHome" class="card caption-this-section hidden">
+          <h2 class="section-title">Caption This</h2>
+          <div id="captionThisPlayerView"></div>
+        </section>
 
         <div class="info-grid">
           <div class="card">
@@ -3800,6 +3822,7 @@ tbody tr:hover td {
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminScoringSection')">Enter Correct Answers</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminBonusSection')">Award Bonus Points</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminRecapSection')">Weekly Recap</button>
+              <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCaptionThisSection')">Caption This</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminInteractionsSection')">Interactions</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminCampContentSection')">Camp Announcements</button>
               <button class="admin-section-tab" type="button" onclick="scrollAdminSection('adminTribeSection')">Tribes</button>
@@ -4430,6 +4453,32 @@ tbody tr:hover td {
               </div>
             </div>
 
+            <!-- Caption This -->
+            <div id="adminCaptionThisSection" class="card inner-card admin-scroll-target">
+              <h3 class="section-title mini">Caption This</h3>
+              <div class="admin-grid compact-admin-grid">
+                <div><label class="admin-label" for="adminCaptionWeek">Week</label><input id="adminCaptionWeek" class="text-input" type="number" min="1" onchange="loadAdminCaptionThis()"></div>
+                <div><label class="admin-label" for="adminCaptionPoints">Winner Points</label><input id="adminCaptionPoints" class="text-input" type="number" min="0"></div>
+                <div><label class="admin-label" for="adminCaptionPhotoUrl">Select Existing Photo or URL</label><input id="adminCaptionPhotoUrl" class="text-input" list="captionPhotoSuggestions" placeholder="Choose an existing photo or paste a URL"><datalist id="captionPhotoSuggestions"></datalist></div>
+                <div><label class="admin-label" for="adminCaptionPhotoFile">Upload Photo</label><input id="adminCaptionPhotoFile" class="text-input" type="file" accept="image/*" onchange="loadCaptionThisPhoto(this.files[0])"></div>
+              </div>
+              <div id="adminCaptionPhotoPreview" class="caption-this-admin-preview"></div>
+              <div class="admin-grid compact-admin-grid">
+                <label class="admin-toggle-row"><input id="adminCaptionSubmissionsOpen" type="checkbox"><span>Caption submissions open</span></label>
+                <label class="admin-toggle-row"><input id="adminCaptionVotingOpen" type="checkbox"><span>Caption voting open</span></label>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="button" onclick="adminSaveCaptionThis()">Save Caption This</button>
+                <button class="btn btn-secondary" type="button" onclick="loadAdminCaptionThis()">Refresh Entries</button>
+              </div>
+              <div id="adminCaptionEntries" class="admin-caption-entries"></div>
+              <div class="admin-row">
+                <div><label class="admin-label" for="adminCaptionWinner">Winning Caption</label><select id="adminCaptionWinner" class="text-input"><option value="">Select tied winner if needed...</option></select></div>
+                <div class="align-end"><button class="btn btn-primary" type="button" onclick="adminFinalizeCaptionThis()">Finalize Winner</button></div>
+              </div>
+              <div id="adminCaptionStatus" class="tiny-note"></div>
+            </div>
+
             <!-- Comments + Reactions -->
             <div id="adminInteractionsSection" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Comments + Reactions</h3>
@@ -4604,6 +4653,9 @@ const ADMIN_DIRTY_SECTIONS = new Set();
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
 let PENDING_INTERACTION_ACTION = null;
+let CAPTION_THIS_PHOTO_DATA_URL = '';
+let CAPTION_THIS_PHOTO_FILE_NAME = '';
+let CAPTION_THIS_PHOTO_MIME_TYPE = '';
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
 const FALLBACK_REACTION_TYPES = [
   { key: 'bold-move', emoji: '🔥', label: 'Bold Move' },
@@ -4790,7 +4842,7 @@ function scrollAdminSection(sectionId) {
 
 function applyAdminAccessRole(role) {
   ADMIN_ACCESS_ROLE = role === 'master' ? 'master' : 'limited';
-  const allowed = new Set(['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection']);
+  const allowed = new Set(['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection', 'adminCaptionThisSection']);
   document.querySelectorAll('.admin-scroll-target').forEach(section => {
     section.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && !allowed.has(section.id));
   });
@@ -4904,6 +4956,8 @@ function renderApp(data) {
   renderContentBlocks(data.contentBlocks || {});
   renderQuestions(data.questions || []);
   renderTopThreeMedals(data.leaderboard || { rows: [] }, data);
+  renderCaptionThis(data.captionThis || {});
+  populateCaptionPhotoSuggestions(data.tribePhotos || []);
   renderRecap(data.weeklyUpdates || []);
   renderCastGrid(data.castGrid || []);
   renderHomePhotos();
@@ -5112,6 +5166,217 @@ function renderTopThreeMedals(data, appData) {
     <div class="podium-column podium-first">${rankGroups[1].map(medalMarkup).join('')}</div>
     <div class="podium-column podium-third">${rankGroups[3].map(medalMarkup).join('')}</div>
   `;
+}
+
+
+function renderCaptionThis(contest) {
+  const section = document.getElementById('captionThisHome');
+  const view = document.getElementById('captionThisPlayerView');
+  if (!section || !view) return;
+  if (!contest || !contest.active) {
+    section.classList.add('hidden');
+    view.innerHTML = '';
+    return;
+  }
+  section.classList.remove('hidden');
+  const selectedId = sessionStorage.getItem('captionThisVoteWeek' + contest.week) || '';
+  const captions = (contest.captions || []).map(item => `
+    <article class="caption-entry ${item.winner ? 'winner' : ''}">
+      ${item.winner ? '<div class="caption-winner-label">Winning Caption</div>' : ''}
+      <div class="caption-entry-text">“${escapeHtml(item.caption || '')}”</div>
+      <div class="caption-entry-footer">
+        <strong>${escapeHtml(item.name || 'Castaway')}</strong>
+        <span>${escapeHtml(String(item.votes || 0))} ${Number(item.votes || 0) === 1 ? 'vote' : 'votes'}</span>
+      </div>
+      ${contest.votingOpen ? `<button class="btn ${selectedId === item.captionId ? 'btn-primary' : 'btn-secondary'} caption-vote-btn" type="button" data-caption-id="${escapeAttr(item.captionId)}" onclick="voteCaptionThis(this)">${selectedId === item.captionId ? 'Your Vote' : 'Vote'}</button>` : ''}
+    </article>
+  `).join('');
+  view.innerHTML = `
+    <div class="caption-this-photo-wrap"><img class="caption-this-photo" src="${escapeAttr(contest.photoUrl)}" alt="Caption This contest"></div>
+    <div class="caption-this-meta">Week ${escapeHtml(String(contest.week || ''))} • ${escapeHtml(String(contest.points || 0))} winner points</div>
+    ${contest.finalized && contest.winner ? `<div class="caption-this-winner"><strong>${escapeHtml(contest.winner.name)}</strong> won ${escapeHtml(String(contest.points || 0))} points with “${escapeHtml(contest.winner.caption)}”</div>` : ''}
+    ${contest.submissionsOpen ? `<div class="caption-submit-form"><textarea class="text-area" id="captionThisText" maxlength="500" placeholder="Write your caption"></textarea><button class="btn btn-primary" type="button" onclick="submitCaptionThis(this)">Submit Caption</button></div>` : '<div class="tiny-note">Caption submissions are closed.</div>'}
+    <div class="caption-entries">${captions || '<div class="announcement">No captions submitted yet.</div>'}</div>
+  `;
+}
+
+function populateCaptionPhotoSuggestions(photos) {
+  const list = document.getElementById('captionPhotoSuggestions');
+  if (!list) return;
+  list.innerHTML = uniqueBy_((photos || []).map(photo => photo.photoUrl).filter(Boolean), normalizeTextKey_)
+    .map(url => `<option value="${escapeAttr(url)}"></option>`).join('');
+}
+
+function submitCaptionThis(button) {
+  const input = document.getElementById('captionThisText');
+  const caption = input ? input.value.trim() : '';
+  if (!caption) return showModal('Missing Caption', 'Write a caption before submitting.');
+  withVerifiedInteraction_(credentials => {
+    button.disabled = true;
+    showLoadingTorch();
+    google.script.run
+      .withSuccessHandler(result => {
+        hideLoadingTorch();
+        button.disabled = false;
+        APP_DATA.captionThis = result.contest;
+        renderCaptionThis(result.contest);
+        showModal('Caption Submitted', result.message || 'Your caption was submitted.');
+      })
+      .withFailureHandler(err => {
+        hideLoadingTorch();
+        button.disabled = false;
+        clearInteractionCredentialsIfRejected_(err);
+        showModal('Caption Error', getErrorMessage(err));
+      })
+      .submitCaptionThis(APP_DATA.captionThis.week, caption, credentials.name, credentials.tribalKey);
+  });
+}
+
+function voteCaptionThis(button) {
+  const captionId = button.dataset.captionId;
+  withVerifiedInteraction_(credentials => {
+    document.querySelectorAll('.caption-vote-btn').forEach(item => item.disabled = true);
+    showLoadingTorch();
+    google.script.run
+      .withSuccessHandler(result => {
+        hideLoadingTorch();
+        sessionStorage.setItem('captionThisVoteWeek' + result.contest.week, result.selectedCaptionId || captionId);
+        APP_DATA.captionThis = result.contest;
+        renderCaptionThis(result.contest);
+      })
+      .withFailureHandler(err => {
+        hideLoadingTorch();
+        document.querySelectorAll('.caption-vote-btn').forEach(item => item.disabled = false);
+        clearInteractionCredentialsIfRejected_(err);
+        showModal('Vote Error', getErrorMessage(err));
+      })
+      .voteCaptionThis(APP_DATA.captionThis.week, captionId, credentials.name, credentials.tribalKey);
+  });
+}
+
+function populateAdminCaptionThis(contest) {
+  const week = document.getElementById('adminCaptionWeek');
+  if (!week) return;
+  week.value = contest.week || (APP_DATA && APP_DATA.weekNumber) || 1;
+  document.getElementById('adminCaptionPoints').value = contest.points || 0;
+  document.getElementById('adminCaptionPhotoUrl').value = contest.photoUrl || '';
+  document.getElementById('adminCaptionSubmissionsOpen').checked = !!contest.submissionsOpen;
+  document.getElementById('adminCaptionVotingOpen').checked = !!contest.votingOpen;
+  document.getElementById('adminCaptionStatus').textContent = contest.finalized ? 'Winner finalized.' : '';
+  renderAdminCaptionEntries_(contest);
+  renderAdminCaptionPreview_(contest.photoUrl || '');
+}
+
+function renderAdminCaptionEntries_(contest) {
+  const wrap = document.getElementById('adminCaptionEntries');
+  const winnerSelect = document.getElementById('adminCaptionWinner');
+  if (!wrap || !winnerSelect) return;
+  const captions = contest.captions || [];
+  wrap.innerHTML = captions.length ? captions.map(item => `
+    <article class="admin-caption-entry">
+      <div><strong>${escapeHtml(item.name)}</strong>: ${escapeHtml(item.caption)}</div>
+      <div><strong>${escapeHtml(String(item.votes || 0))} votes</strong> ${item.winner ? '• Winner' : ''}</div>
+      <button class="btn btn-secondary" type="button" data-caption-id="${escapeAttr(item.captionId)}" onclick="adminRemoveCaptionThis(this)">Remove</button>
+    </article>
+  `).join('') : '<div class="announcement">No captions submitted for this week.</div>';
+  winnerSelect.innerHTML = '<option value="">Select tied winner if needed...</option>' + captions.map(item =>
+    `<option value="${escapeAttr(item.captionId)}" ${item.winner ? 'selected' : ''}>${escapeHtml(item.name)} — ${escapeHtml(item.caption)} (${item.votes} votes)</option>`
+  ).join('');
+}
+
+function renderAdminCaptionPreview_(url) {
+  document.getElementById('adminCaptionPhotoPreview').innerHTML = url ? `<img src="${escapeAttr(url)}" alt="Caption This preview">` : '';
+}
+
+function loadCaptionThisPhoto(file) {
+  if (!file) return;
+  if (!String(file.type || '').startsWith('image/')) return showModal('Invalid Photo', 'Choose an image file.');
+  const reader = new FileReader();
+  reader.onload = event => {
+    CAPTION_THIS_PHOTO_DATA_URL = event.target.result;
+    CAPTION_THIS_PHOTO_FILE_NAME = file.name;
+    CAPTION_THIS_PHOTO_MIME_TYPE = file.type;
+    renderAdminCaptionPreview_(CAPTION_THIS_PHOTO_DATA_URL);
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadAdminCaptionThis() {
+  const week = Number(document.getElementById('adminCaptionWeek').value || (APP_DATA && APP_DATA.weekNumber) || 1);
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(contest => {
+      hideLoadingTorch();
+      populateAdminCaptionThis(contest || {});
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Caption This Error', getErrorMessage(err));
+    })
+    .getAdminCaptionThis(ADMIN_PASSCODE, week);
+}
+
+function adminSaveCaptionThis() {
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoadingTorch();
+      CAPTION_THIS_PHOTO_DATA_URL = '';
+      populateAdminCaptionThis(result.contest || {});
+      if (APP_DATA && Number(result.contest.week) === Number(APP_DATA.weekNumber)) {
+        APP_DATA.captionThis = result.contest;
+        renderCaptionThis(result.contest);
+      }
+      showModal('Caption This Saved', result.message || 'Contest saved.');
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Caption This Error', getErrorMessage(err));
+    })
+    .adminSaveCaptionThis(ADMIN_PASSCODE, {
+      week: Number(document.getElementById('adminCaptionWeek').value || 0),
+      points: Number(document.getElementById('adminCaptionPoints').value || 0),
+      photoUrl: document.getElementById('adminCaptionPhotoUrl').value.trim(),
+      submissionsOpen: document.getElementById('adminCaptionSubmissionsOpen').checked,
+      votingOpen: document.getElementById('adminCaptionVotingOpen').checked,
+      dataUrl: CAPTION_THIS_PHOTO_DATA_URL,
+      fileName: CAPTION_THIS_PHOTO_FILE_NAME,
+      mimeType: CAPTION_THIS_PHOTO_MIME_TYPE
+    });
+}
+
+function adminRemoveCaptionThis(button) {
+  if (!window.confirm('Remove this caption? This cannot be undone from the webpage.')) return;
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoadingTorch();
+      populateAdminCaptionThis(result.contest || {});
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Caption Removal Error', getErrorMessage(err));
+    })
+    .adminRemoveCaptionThis(ADMIN_PASSCODE, Number(document.getElementById('adminCaptionWeek').value), button.dataset.captionId);
+}
+
+function adminFinalizeCaptionThis() {
+  if (!window.confirm('Finalize the winning caption and award its points?')) return;
+  const week = Number(document.getElementById('adminCaptionWeek').value || 0);
+  const winnerId = document.getElementById('adminCaptionWinner').value;
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoadingTorch();
+      populateAdminCaptionThis(result.contest || {});
+      loadAppData();
+      showModal('Caption This Finalized', result.message || 'Winner finalized.');
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Caption Finalization Error', getErrorMessage(err));
+    })
+    .adminFinalizeCaptionThis(ADMIN_PASSCODE, week, winnerId);
 }
 
 function renderRecap(updates) {
@@ -6223,6 +6488,7 @@ function loadAdminDashboard() {
       const recapTitleInput = document.getElementById('adminRecapTitle');
       if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
+      populateAdminCaptionThis(data.captionThis || {});
       if (ADMIN_ACCESS_ROLE === 'master') {
         populateAdminSeasonPhase(data);
         populateAdminVotingSchedule(data);

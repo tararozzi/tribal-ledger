@@ -3439,6 +3439,28 @@ tbody tr:hover td {
 .my-pick-card { padding: var(--ledger-column-padding-y); }
 .my-pick-question, .my-pick-answer { overflow-wrap: normal; word-break: normal; hyphens: none; }
 
+.caption-this-section { max-width: 860px; margin: 22px auto; text-align: center; }
+.caption-this-photo-wrap { display: flex; justify-content: center; margin: 12px 0; }
+.caption-this-photo { display: block; width: min(100%, 680px); max-height: 520px; object-fit: contain; border-radius: 10px; border: 3px solid rgba(240,184,77,.68); box-shadow: 0 12px 28px rgba(47,38,28,.22); }
+.caption-this-meta { margin: 8px 0 14px; color: #705337; font-weight: 900; }
+.caption-this-winner { margin: 12px auto; padding: 14px; border: 2px solid #d89120; border-radius: 10px; background: rgba(255,224,122,.24); color: #4c3218; }
+.caption-submit-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin: 16px auto; text-align: left; }
+.caption-entries { display: grid; gap: 12px; margin-top: 18px; text-align: left; }
+.caption-entry { padding: 14px; border: 1px solid rgba(47,113,108,.24); border-radius: 10px; background: rgba(255,253,247,.9); box-shadow: 0 6px 16px rgba(47,38,28,.08); }
+.caption-entry.winner { border: 2px solid #d89120; background: rgba(255,248,218,.95); }
+.caption-winner-label { margin-bottom: 6px; color: #9a5b00; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.caption-entry-text { color: #2d2016; font-size: 1.06rem; line-height: 1.45; }
+.caption-entry-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: #31524c; }
+.caption-vote-btn { margin-top: 10px; }
+.caption-this-admin-preview img { display: block; max-width: min(100%,460px); max-height: 320px; object-fit: contain; margin: 12px auto; border-radius: 8px; }
+.admin-caption-entries { display: grid; gap: 10px; margin: 16px 0; }
+.admin-caption-entry { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid rgba(47,113,108,.22); border-radius: 8px; background: rgba(255,253,247,.78); }
+@media (max-width: 640px) {
+  .caption-submit-form, .admin-caption-entry { grid-template-columns: 1fr; }
+  .caption-entry-footer { align-items: flex-start; flex-direction: column; }
+}
+
+
 .interaction-signin-note { margin-bottom: 8px; font-weight: 800; color: #31524c; }
 .comment-reply-toggle { margin-top: 8px; border: 0; background: transparent; color: #2f716c; font: inherit; font-weight: 900; cursor: pointer; }
 .recap-reply-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border-left: 3px solid rgba(47, 113, 108, 0.35); }
