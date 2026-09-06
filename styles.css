@@ -3438,3 +3438,11 @@ tbody tr:hover td {
 .season-ledger-table .ledger-question-header, .camp-picks-table .ledger-question-header, .season-ledger-table .ledger-pick-cell, .camp-picks-table .ledger-pick-cell { padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); }
 .my-pick-card { padding: var(--ledger-column-padding-y); }
 .my-pick-question, .my-pick-answer { overflow-wrap: normal; word-break: normal; hyphens: none; }
+
+.interaction-signin-note { margin-bottom: 8px; font-weight: 800; color: #31524c; }
+.comment-reply-toggle { margin-top: 8px; border: 0; background: transparent; color: #2f716c; font: inherit; font-weight: 900; cursor: pointer; }
+.recap-reply-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border-left: 3px solid rgba(47, 113, 108, 0.35); }
+.recap-comment-replies { display: grid; gap: 10px; margin: 12px 0 0 24px; }
+.recap-comment-reply { background: rgba(255, 253, 247, 0.72); }
+#interactionAuthStatus { min-height: 1.4em; margin-top: 10px; color: #9a321f; font-weight: 800; }
+@media (max-width: 640px) { .recap-comment-replies { margin-left: 10px; } }

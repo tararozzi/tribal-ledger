@@ -3496,6 +3496,13 @@ tbody tr:hover td {
 .season-ledger-table .ledger-question-header, .camp-picks-table .ledger-question-header, .season-ledger-table .ledger-pick-cell, .camp-picks-table .ledger-pick-cell { padding: var(--ledger-column-padding-y) var(--ledger-column-padding-x); }
 .my-pick-card { padding: var(--ledger-column-padding-y); }
 .my-pick-question, .my-pick-answer { overflow-wrap: normal; word-break: normal; hyphens: none; }
+.interaction-signin-note { margin-bottom: 8px; font-weight: 800; color: #31524c; }
+.comment-reply-toggle { margin-top: 8px; border: 0; background: transparent; color: #2f716c; font: inherit; font-weight: 900; cursor: pointer; }
+.recap-reply-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border-left: 3px solid rgba(47, 113, 108, 0.35); }
+.recap-comment-replies { display: grid; gap: 10px; margin: 12px 0 0 24px; }
+.recap-comment-reply { background: rgba(255, 253, 247, 0.72); }
+#interactionAuthStatus { min-height: 1.4em; margin-top: 10px; color: #9a321f; font-weight: 800; }
+@media (max-width: 640px) { .recap-comment-replies { margin-left: 10px; } }
 </style>
 </head>
 <body>
@@ -4560,6 +4567,25 @@ tbody tr:hover td {
     </div>
   </div>
 
+  <div id="interactionAuthModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="interactionAuthTitle">
+    <div class="modal-backdrop" onclick="closeInteractionSignIn()"></div>
+    <div class="modal-card parchment">
+      <div class="modal-title" id="interactionAuthTitle">Castaway Sign In</div>
+      <div class="modal-body">
+        <p>Enter your registered Castaway Name and Tribal Key to comment, reply, or react.</p>
+        <label class="admin-label" for="interactionAuthName">Castaway Name</label>
+        <input id="interactionAuthName" class="text-input" autocomplete="username" onblur="normalizePlayerNameInput_(this)">
+        <label class="admin-label" for="interactionAuthKey">Tribal Key</label>
+        <input id="interactionAuthKey" class="text-input" type="password" autocomplete="current-password">
+        <div id="interactionAuthStatus" class="tiny-note"></div>
+      </div>
+      <div class="form-actions center">
+        <button class="btn btn-secondary" type="button" onclick="closeInteractionSignIn()">Cancel</button>
+        <button id="interactionAuthSubmit" class="btn btn-primary" type="button" onclick="submitInteractionSignIn()">Sign In</button>
+      </div>
+    </div>
+  </div>
+
 <script>
 let APP_DATA = null;
 let ADMIN_PASSCODE = '';
@@ -4577,6 +4603,7 @@ let ADMIN_SAVED_STATE = null;
 const ADMIN_DIRTY_SECTIONS = new Set();
 const COUNTDOWN_TIMERS = {};
 let INTERACTION_SESSION_ID = localStorage.getItem('survivor51_reaction_session') || '';
+let PENDING_INTERACTION_ACTION = null;
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
 const FALLBACK_REACTION_TYPES = [
   { key: 'bold-move', emoji: '🔥', label: 'Bold Move' },
@@ -5180,11 +5207,11 @@ function renderReactionBar(targetId, counts, targetType, week) {
 function renderRecapDiscussion(update) {
   const comments = update.comments || [];
   const pinned = comments.find(comment => comment.pinned);
-  const list = comments.filter(comment => !comment.pinned).map(renderCommentCard).join('');
-  const savedName = localStorage.getItem('survivor51_name') || '';
+  const list = comments.filter(comment => !comment.pinned).map(comment => renderCommentCard(comment, false)).join('');
+  const interactionCredentials = getInteractionCredentials_();
   const form = commentsAreEnabled() ? `
     <div class="recap-comment-form">
-      <input class="text-input recap-comment-name" placeholder="Player name" value="${escapeAttr(savedName)}" onblur="normalizePlayerNameInput_(this)">
+      <div class="tiny-note interaction-signin-note">${interactionCredentials ? `Signed in as ${escapeHtml(interactionCredentials.name)}` : 'Castaway sign-in required to post.'}</div>
       <textarea class="text-area recap-comment-text" placeholder="Share your read on the episode, strategy, blindsides, alliances, or gameplay"></textarea>
       <button class="btn btn-primary" type="button" onclick="submitRecapComment(this, ${Number(update.week || 0)})">Post Comment</button>
     </div>
@@ -5203,37 +5230,62 @@ function renderRecapDiscussion(update) {
   `;
 }
 
-function renderCommentCard(comment) {
+function renderCommentCard(comment, isReply) {
   const targetId = comment.targetId || buildInteractionTargetId('comment', comment.week, comment.commentId);
+  const replies = (comment.replies || []).map(reply => renderCommentCard(reply, true)).join('');
   return `
-    <article class="recap-comment-card ${comment.pinned ? 'pinned' : ''}">
+    <article class="recap-comment-card ${comment.pinned ? 'pinned' : ''} ${isReply ? 'recap-comment-reply' : ''}">
       <div class="recap-comment-head">
         <strong>${escapeHtml(comment.name || 'Castaway')}</strong>
         <span>${escapeHtml(comment.timestampLabel || formatCommentTime(comment.timestamp))}</span>
       </div>
       <div class="recap-comment-text-body">${escapeHtml(comment.text || '')}</div>
       ${renderReactionBar(targetId, comment.reactions || {}, 'comment', comment.week)}
+      ${!isReply && commentsAreEnabled() ? `
+        <button class="comment-reply-toggle" type="button" onclick="toggleRecapReplyForm(this)">Reply</button>
+        <div class="recap-reply-form hidden" data-comment-id="${escapeAttr(comment.commentId || '')}" data-week="${escapeAttr(String(comment.week || ''))}">
+          <textarea class="text-area recap-reply-text" placeholder="Write a reply"></textarea>
+          <button class="btn btn-primary" type="button" onclick="submitRecapReply(this)">Post Reply</button>
+        </div>` : ''}
+      ${replies ? `<div class="recap-comment-replies">${replies}</div>` : ''}
     </article>
   `;
 }
 
 function submitRecapComment(button, week) {
   const wrap = button.closest('.recap-comment-form');
-  const nameInput = wrap.querySelector('.recap-comment-name');
-  const name = formatPlayerDisplayName_(nameInput.value);
-  nameInput.value = name;
   const text = wrap.querySelector('.recap-comment-text').value.trim();
-  if (!name || !text) {
-    showModal('Missing Comment', 'Enter your player name and a comment before posting.');
+  if (!text) {
+    showModal('Missing Comment', 'Write a comment before posting.');
     return;
   }
+  withVerifiedInteraction_(credentials => postRecapComment_(button, week, text, credentials, ''));
+}
+
+function toggleRecapReplyForm(button) {
+  withVerifiedInteraction_(() => {
+    const form = button.parentElement.querySelector(':scope > .recap-reply-form');
+    if (!form) return;
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) form.querySelector('textarea').focus();
+  });
+}
+
+function submitRecapReply(button) {
+  const form = button.closest('.recap-reply-form');
+  const text = form.querySelector('.recap-reply-text').value.trim();
+  if (!text) return showModal('Missing Reply', 'Write a reply before posting.');
+  withVerifiedInteraction_(credentials => postRecapComment_(button, Number(form.dataset.week), text, credentials, form.dataset.commentId));
+}
+
+function postRecapComment_(button, week, text, credentials, parentCommentId) {
   button.disabled = true;
   showLoadingTorch();
   google.script.run
     .withSuccessHandler(result => {
       hideLoadingTorch();
       button.disabled = false;
-      localStorage.setItem('survivor51_name', name);
+      localStorage.setItem('survivor51_name', credentials.name);
       const update = (APP_DATA.weeklyUpdates || []).find(item => Number(item.week) === Number(week));
       if (update) update.comments = (result && result.comments) || [];
       renderRecap(APP_DATA.weeklyUpdates || []);
@@ -5243,17 +5295,21 @@ function submitRecapComment(button, week) {
     .withFailureHandler(err => {
       hideLoadingTorch();
       button.disabled = false;
+      clearInteractionCredentialsIfRejected_(err);
       showModal('Comment Error', getErrorMessage(err));
     })
-    .addRecapComment(week, name, text, INTERACTION_SESSION_ID);
+    .addRecapComment(week, credentials.name, text, INTERACTION_SESSION_ID, credentials.tribalKey, parentCommentId);
 }
 
 function toggleReactionButton(button) {
+  withVerifiedInteraction_(credentials => toggleVerifiedReaction_(button, credentials));
+}
+
+function toggleVerifiedReaction_(button, credentials) {
   const bar = button.closest('.reaction-bar');
   if (!bar) return;
   const targetId = bar.dataset.targetId;
   const reaction = button.dataset.reaction;
-  const name = localStorage.getItem('survivor51_name') || '';
   button.disabled = true;
   showLoadingTorch();
   google.script.run
@@ -5265,13 +5321,77 @@ function toggleReactionButton(button) {
     .withFailureHandler(err => {
       hideLoadingTorch();
       button.disabled = false;
+      clearInteractionCredentialsIfRejected_(err);
       showModal('Reaction Error', getErrorMessage(err));
     })
     .toggleReaction({
       targetId,
       targetType: bar.dataset.targetType,
       week: bar.dataset.week
-    }, reaction, INTERACTION_SESSION_ID, name);
+    }, reaction, INTERACTION_SESSION_ID, credentials.name, credentials.tribalKey);
+}
+
+function getInteractionCredentials_() {
+  const name = sessionStorage.getItem('tribalLedgerInteractionName') || '';
+  const tribalKey = sessionStorage.getItem('tribalLedgerInteractionKey') || '';
+  return name && tribalKey ? { name, tribalKey } : null;
+}
+
+function clearInteractionCredentialsIfRejected_(err) {
+  const message = getErrorMessage(err).toLowerCase();
+  if (!message.includes('tribal key') && !message.includes('tribe roster')) return;
+  sessionStorage.removeItem('tribalLedgerInteractionName');
+  sessionStorage.removeItem('tribalLedgerInteractionKey');
+}
+
+function withVerifiedInteraction_(action) {
+  const credentials = getInteractionCredentials_();
+  if (credentials) return action(credentials);
+  PENDING_INTERACTION_ACTION = action;
+  const modal = document.getElementById('interactionAuthModal');
+  document.getElementById('interactionAuthName').value = localStorage.getItem('survivor51_name') || '';
+  document.getElementById('interactionAuthKey').value = '';
+  document.getElementById('interactionAuthStatus').textContent = '';
+  modal.classList.remove('hidden');
+  document.getElementById('interactionAuthName').focus();
+}
+
+function closeInteractionSignIn() {
+  document.getElementById('interactionAuthModal').classList.add('hidden');
+  PENDING_INTERACTION_ACTION = null;
+}
+
+function submitInteractionSignIn() {
+  const nameInput = document.getElementById('interactionAuthName');
+  const name = formatPlayerDisplayName_(nameInput.value);
+  const tribalKey = document.getElementById('interactionAuthKey').value.trim();
+  nameInput.value = name;
+  if (!name || !tribalKey) {
+    document.getElementById('interactionAuthStatus').textContent = 'Enter your Castaway Name and Tribal Key.';
+    return;
+  }
+  const button = document.getElementById('interactionAuthSubmit');
+  button.disabled = true;
+  showLoadingTorch();
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoadingTorch();
+      button.disabled = false;
+      const verifiedName = result.name || name;
+      sessionStorage.setItem('tribalLedgerInteractionName', verifiedName);
+      sessionStorage.setItem('tribalLedgerInteractionKey', tribalKey);
+      localStorage.setItem('survivor51_name', verifiedName);
+      document.getElementById('interactionAuthModal').classList.add('hidden');
+      const action = PENDING_INTERACTION_ACTION;
+      PENDING_INTERACTION_ACTION = null;
+      if (action) action({ name: verifiedName, tribalKey });
+    })
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      button.disabled = false;
+      document.getElementById('interactionAuthStatus').textContent = getErrorMessage(err);
+    })
+    .verifyInteractionPlayer(name, tribalKey);
 }
 
 function refreshVisibleReactionSelections() {

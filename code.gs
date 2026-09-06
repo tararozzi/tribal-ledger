@@ -57,7 +57,7 @@ const GAME_HEADERS_51 = {
   WEEKRECAPS: ['Week', 'Title', 'RecapHtml'],
   PHOTOS: ['Timestamp', 'Week', 'Name', 'Email', 'Caption', 'PhotoUrl', 'DriveFileId', 'Approved'],
   REACTIONS: ['Timestamp', 'TargetId', 'TargetType', 'Week', 'Reaction', 'SessionId', 'Name'],
-  COMMENTS: ['CommentId', 'Timestamp', 'Week', 'Name', 'Comment', 'Pinned', 'Deleted'],
+  COMMENTS: ['CommentId', 'Timestamp', 'Week', 'Name', 'Comment', 'Pinned', 'Deleted', 'ParentCommentId'],
   QUESTIONWEEKS: [
     'Week',
     'Q1', 'Q1Points', 'Q1Type', 'Q1Options',

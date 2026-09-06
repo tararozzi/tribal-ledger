@@ -219,7 +219,8 @@ function getVercelRpcHandlers_() {
     submitPicks,
     toggleReaction,
     uploadTribePhoto,
-    verifyAdminPasscode
+    verifyAdminPasscode,
+    verifyInteractionPlayer
   };
 }
 
@@ -2305,7 +2306,14 @@ function getApprovedTribePhotoAlbums_(config, timezone) {
     }));
 }
 
-function toggleReaction(target, reactionKey, sessionId, name) {
+function verifyInteractionPlayer(name, tribalKey) {
+  const players = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
+    .filter(player => String(player.Active || '').trim().toUpperCase() !== 'FALSE');
+  const player = verifyPlayerTribalKeyOrThrow_(players, normalizePlayerDisplayName51_(name), tribalKey);
+  return { ok: true, name: String(player.Name || '').trim() };
+}
+
+function toggleReaction(target, reactionKey, sessionId, name, tribalKey) {
   const ss = SpreadsheetApp.getActive();
   const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
   if (!getInteractionConfig_(config).reactionsEnabled) throw new Error('Reactions are currently closed.');
@@ -2316,6 +2324,8 @@ function toggleReaction(target, reactionKey, sessionId, name) {
   if (!cleanTarget.targetId) throw new Error('Missing reaction target.');
   if (!cleanReaction) throw new Error('Choose a valid reaction.');
   if (!cleanSession) throw new Error('Missing session.');
+  const verified = verifyInteractionPlayer(name, tribalKey);
+  const verifiedName = verified.name;
 
   ensureSheetWithHeaders_(ss, APP_SHEETS_51.REACTIONS, GAME_HEADERS_51.REACTIONS);
   const sheet = mustGetSheet_(ss, APP_SHEETS_51.REACTIONS);
@@ -2325,7 +2335,7 @@ function toggleReaction(target, reactionKey, sessionId, name) {
     if (
       String(rows[i].TargetId || '') === cleanTarget.targetId &&
       String(rows[i].Reaction || '') === cleanReaction &&
-      String(rows[i].SessionId || '') === cleanSession
+      nameKey51_(rows[i].Name) === nameKey51_(verifiedName)
     ) {
       existingRow = i + 2;
       break;
@@ -2342,21 +2352,23 @@ function toggleReaction(target, reactionKey, sessionId, name) {
       cleanTarget.week || '',
       cleanReaction,
       cleanSession,
-      String(name || '').trim()
+      verifiedName
     ]);
   }
 
   return getInteractionState([cleanTarget.targetId], cleanSession);
 }
 
-function addRecapComment(week, name, comment, sessionId) {
+function addRecapComment(week, name, comment, sessionId, tribalKey, parentCommentId) {
   const ss = SpreadsheetApp.getActive();
   const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
   if (!getInteractionConfig_(config).commentsEnabled) throw new Error('Comments are currently closed.');
 
   const cleanWeek = Number(week || 0);
-  const cleanName = normalizePlayerDisplayName51_(name);
+  const verified = verifyInteractionPlayer(name, tribalKey);
+  const cleanName = verified.name;
   const cleanComment = String(comment || '').replace(/<[^>]*>/g, '').trim();
+  const cleanParentId = String(parentCommentId || '').trim();
   if (!cleanWeek) throw new Error('Missing recap week.');
   if (!cleanName) throw new Error('Enter your player name.');
   if (!cleanComment) throw new Error('Write a comment before posting.');
@@ -2364,7 +2376,14 @@ function addRecapComment(week, name, comment, sessionId) {
   ensureSheetWithHeaders_(ss, APP_SHEETS_51.COMMENTS, GAME_HEADERS_51.COMMENTS);
   const sheet = mustGetSheet_(ss, APP_SHEETS_51.COMMENTS);
   const commentId = `comment-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-  sheet.appendRow([commentId, new Date(), cleanWeek, cleanName, cleanComment.slice(0, 1200), 'FALSE', 'FALSE']);
+  if (cleanParentId) {
+    const parent = readTable_(sheet).find(row =>
+      String(row.CommentId || '').trim() === cleanParentId &&
+      Number(row.Week || 0) === cleanWeek &&
+      String(row.Deleted || '').trim().toUpperCase() !== 'TRUE');
+    if (!parent) throw new Error('The comment you are replying to is no longer available.');
+  }
+  sheet.appendRow([commentId, new Date(), cleanWeek, cleanName, cleanComment.slice(0, 1200), 'FALSE', 'FALSE', cleanParentId]);
   return {
     ok: true,
     comments: getCommentsByWeek_()[cleanWeek] || []
@@ -2435,6 +2454,7 @@ function getCommentsByWeek_() {
   ensureSheetWithHeaders_(ss, APP_SHEETS_51.COMMENTS, GAME_HEADERS_51.COMMENTS);
   const reactionSummary = getReactionSummary_('');
   const byWeek = {};
+  const comments = [];
   readTable_(mustGetSheet_(ss, APP_SHEETS_51.COMMENTS))
     .filter(row => String(row.Deleted || '').trim().toUpperCase() !== 'TRUE')
     .forEach(row => {
@@ -2443,7 +2463,7 @@ function getCommentsByWeek_() {
       if (!byWeek[week]) byWeek[week] = [];
       const commentId = String(row.CommentId || '').trim();
       const targetId = buildInteractionTargetId_('comment', week, commentId);
-      byWeek[week].push({
+      comments.push({
         commentId,
         targetId,
         week,
@@ -2452,10 +2472,25 @@ function getCommentsByWeek_() {
         timestamp: row.Timestamp ? new Date(row.Timestamp).toISOString() : '',
         timestampLabel: row.Timestamp ? Utilities.formatDate(new Date(row.Timestamp), Session.getScriptTimeZone() || 'America/Los_Angeles', 'MMM d, h:mm a') : '',
         pinned: String(row.Pinned || '').trim().toUpperCase() === 'TRUE',
+        parentCommentId: String(row.ParentCommentId || '').trim(),
+        replies: [],
         reactions: reactionSummary.counts[targetId] || {}
       });
     });
+  comments.forEach(comment => {
+    if (!byWeek[comment.week]) byWeek[comment.week] = [];
+    if (!comment.parentCommentId) byWeek[comment.week].push(comment);
+  });
+  const commentsById = {};
+  comments.forEach(comment => commentsById[comment.commentId] = comment);
+  comments.forEach(comment => {
+    if (!comment.parentCommentId) return;
+    const parent = commentsById[comment.parentCommentId];
+    if (parent) parent.replies.push(comment);
+    else byWeek[comment.week].push(comment);
+  });
   Object.keys(byWeek).forEach(week => {
+    byWeek[week].forEach(comment => comment.replies.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)));
     byWeek[week].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
