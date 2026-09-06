@@ -3511,6 +3511,7 @@ tbody tr:hover td {
 .caption-this-photo-wrap { display: flex; justify-content: center; margin: 12px 0; }
 .caption-this-photo { display: block; width: min(100%, 680px); max-height: 520px; object-fit: contain; border-radius: 10px; border: 3px solid rgba(240,184,77,.68); box-shadow: 0 12px 28px rgba(47,38,28,.22); }
 .caption-this-meta { margin: 8px 0 14px; color: #705337; font-weight: 900; }
+.caption-this-countdown { margin: -6px 0 14px; color: #31524c; font-weight: 900; text-align: center; }
 .caption-this-winner { margin: 12px auto; padding: 14px; border: 2px solid #d89120; border-radius: 10px; background: rgba(255,224,122,.24); color: #4c3218; }
 .caption-submit-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin: 16px auto; text-align: left; }
 .caption-entries { display: grid; gap: 12px; margin-top: 18px; text-align: left; }
@@ -4461,15 +4462,15 @@ tbody tr:hover td {
             <div id="adminCaptionThisSection" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Caption This</h3>
               <div class="admin-grid compact-admin-grid">
-                <div><label class="admin-label" for="adminCaptionWeek">Week</label><input id="adminCaptionWeek" class="text-input" type="number" min="1" onchange="loadAdminCaptionThis()"></div>
                 <div><label class="admin-label" for="adminCaptionPoints">Winner Points</label><input id="adminCaptionPoints" class="text-input" type="number" min="0"></div>
+                <div><label class="admin-label" for="adminCaptionDeadline">Voting Deadline</label><input id="adminCaptionDeadline" class="text-input" type="datetime-local"></div>
                 <div><label class="admin-label" for="adminCaptionPhotoUrl">Select Existing Photo or URL</label><input id="adminCaptionPhotoUrl" class="text-input" list="captionPhotoSuggestions" placeholder="Choose an existing photo or paste a URL"><datalist id="captionPhotoSuggestions"></datalist></div>
                 <div><label class="admin-label" for="adminCaptionPhotoFile">Upload Photo</label><input id="adminCaptionPhotoFile" class="text-input" type="file" accept="image/*" onchange="loadCaptionThisPhoto(this.files[0])"></div>
               </div>
               <div id="adminCaptionPhotoPreview" class="caption-this-admin-preview"></div>
               <div class="admin-grid compact-admin-grid">
                 <label class="admin-toggle-row"><input id="adminCaptionSubmissionsOpen" type="checkbox"><span>Caption submissions open</span></label>
-                <label class="admin-toggle-row"><input id="adminCaptionVotingOpen" type="checkbox"><span>Caption voting open</span></label>
+                <div class="tiny-note align-end">Voting opens automatically when the contest is published and closes at the deadline.</div>
               </div>
               <div class="form-actions">
                 <button class="btn btn-primary" type="button" onclick="adminSaveCaptionThis()">Save Caption This</button>
@@ -4660,6 +4661,7 @@ let PENDING_INTERACTION_ACTION = null;
 let CAPTION_THIS_PHOTO_DATA_URL = '';
 let CAPTION_THIS_PHOTO_FILE_NAME = '';
 let CAPTION_THIS_PHOTO_MIME_TYPE = '';
+let ADMIN_CAPTION_CONTEST_WEEK = 0;
 const APPS_SCRIPT_API_URL = window.SURVIVOR51_APPS_SCRIPT_API_URL || '/api/apps-script';
 const FALLBACK_REACTION_TYPES = [
   { key: 'bold-move', emoji: '🔥', label: 'Bold Move' },
@@ -5183,6 +5185,8 @@ function renderCaptionThis(contest) {
     return;
   }
   section.classList.remove('hidden');
+  const deadlinePassed = !contest.deadlineIso || new Date(contest.deadlineIso).getTime() <= Date.now();
+  contest.votingOpen = !!contest.votingOpen && !deadlinePassed;
   const selectedId = sessionStorage.getItem('captionThisVoteWeek' + contest.week) || '';
   const captions = (contest.captions || []).map(item => `
     <article class="caption-entry ${item.winner ? 'winner' : ''}">
@@ -5197,11 +5201,41 @@ function renderCaptionThis(contest) {
   `).join('');
   view.innerHTML = `
     <div class="caption-this-photo-wrap"><img class="caption-this-photo" src="${escapeAttr(contest.photoUrl)}" alt="Caption This contest"></div>
-    <div class="caption-this-meta">Week ${escapeHtml(String(contest.week || ''))} • ${escapeHtml(String(contest.points || 0))} winner points</div>
+    <div class="caption-this-meta">Caption with the most votes by ${escapeHtml(contest.deadlineLabel || 'the deadline')} will earn ${escapeHtml(String(contest.points || 0))} points.</div>
+    <div id="captionThisCountdown" class="caption-this-countdown">${contest.votingOpen ? 'Voting closes in: calculating…' : 'Voting has closed.'}</div>
     ${contest.finalized && contest.winner ? `<div class="caption-this-winner"><strong>${escapeHtml(contest.winner.name)}</strong> won ${escapeHtml(String(contest.points || 0))} points with “${escapeHtml(contest.winner.caption)}”</div>` : ''}
     ${contest.submissionsOpen ? `<div class="caption-submit-form"><textarea class="text-area" id="captionThisText" maxlength="500" placeholder="Write your caption"></textarea><button class="btn btn-primary" type="button" onclick="submitCaptionThis(this)">Submit Caption</button></div>` : '<div class="tiny-note">Caption submissions are closed.</div>'}
     <div class="caption-entries">${captions || '<div class="announcement">No captions submitted yet.</div>'}</div>
   `;
+  startCaptionThisCountdown_(contest);
+}
+
+function startCaptionThisCountdown_(contest) {
+  stopCountdown('captionThisCountdown', undefined);
+  const el = document.getElementById('captionThisCountdown');
+  if (!el || !contest.votingOpen || !contest.deadlineIso) {
+    if (el) el.textContent = 'Voting has closed.';
+    return;
+  }
+  function tick() {
+    const diff = new Date(contest.deadlineIso).getTime() - Date.now();
+    if (diff <= 0) {
+      stopCountdown('captionThisCountdown', 'Voting has closed.');
+      contest.votingOpen = false;
+      document.querySelectorAll('.caption-vote-btn').forEach(button => button.remove());
+      return;
+    }
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const parts = [];
+    if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+    if (hours || days) parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+    parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+    el.textContent = `Voting closes in: ${parts.join(', ')}`;
+  }
+  tick();
+  COUNTDOWN_TIMERS.captionThisCountdown = setInterval(tick, 1000);
 }
 
 function populateCaptionPhotoSuggestions(photos) {
@@ -5259,14 +5293,13 @@ function voteCaptionThis(button) {
 }
 
 function populateAdminCaptionThis(contest) {
-  const week = document.getElementById('adminCaptionWeek');
-  if (!week) return;
-  week.value = contest.week || (APP_DATA && APP_DATA.weekNumber) || 1;
+  if (!document.getElementById('adminCaptionPoints')) return;
+  ADMIN_CAPTION_CONTEST_WEEK = Number(contest.week || (APP_DATA && APP_DATA.weekNumber) || 1);
   document.getElementById('adminCaptionPoints').value = contest.points || 0;
+  document.getElementById('adminCaptionDeadline').value = contest.deadlineInput || '';
   document.getElementById('adminCaptionPhotoUrl').value = contest.photoUrl || '';
   document.getElementById('adminCaptionSubmissionsOpen').checked = !!contest.submissionsOpen;
-  document.getElementById('adminCaptionVotingOpen').checked = !!contest.votingOpen;
-  document.getElementById('adminCaptionStatus').textContent = contest.finalized ? 'Winner finalized.' : '';
+  document.getElementById('adminCaptionStatus').textContent = contest.finalized ? 'Winner finalized.' : (contest.votingOpen ? 'Voting is open and will close automatically at the deadline.' : 'Voting is closed.');
   renderAdminCaptionEntries_(contest);
   renderAdminCaptionPreview_(contest.photoUrl || '');
 }
@@ -5282,7 +5315,7 @@ function renderAdminCaptionEntries_(contest) {
       <div><strong>${escapeHtml(String(item.votes || 0))} votes</strong> ${item.winner ? '• Winner' : ''}</div>
       <button class="btn btn-secondary" type="button" data-caption-id="${escapeAttr(item.captionId)}" onclick="adminRemoveCaptionThis(this)">Remove</button>
     </article>
-  `).join('') : '<div class="announcement">No captions submitted for this week.</div>';
+  `).join('') : '<div class="announcement">No captions submitted for this contest.</div>';
   winnerSelect.innerHTML = '<option value="">Select tied winner if needed...</option>' + captions.map(item =>
     `<option value="${escapeAttr(item.captionId)}" ${item.winner ? 'selected' : ''}>${escapeHtml(item.name)} — ${escapeHtml(item.caption)} (${item.votes} votes)</option>`
   ).join('');
@@ -5306,7 +5339,7 @@ function loadCaptionThisPhoto(file) {
 }
 
 function loadAdminCaptionThis() {
-  const week = Number(document.getElementById('adminCaptionWeek').value || (APP_DATA && APP_DATA.weekNumber) || 1);
+  const week = Number(ADMIN_CAPTION_CONTEST_WEEK || (APP_DATA && APP_DATA.weekNumber) || 1);
   showLoadingTorch();
   google.script.run
     .withSuccessHandler(contest => {
@@ -5338,11 +5371,11 @@ function adminSaveCaptionThis() {
       showModal('Caption This Error', getErrorMessage(err));
     })
     .adminSaveCaptionThis(ADMIN_PASSCODE, {
-      week: Number(document.getElementById('adminCaptionWeek').value || 0),
+      week: Number(ADMIN_CAPTION_CONTEST_WEEK || (APP_DATA && APP_DATA.weekNumber) || 1),
       points: Number(document.getElementById('adminCaptionPoints').value || 0),
+      deadline: document.getElementById('adminCaptionDeadline').value,
       photoUrl: document.getElementById('adminCaptionPhotoUrl').value.trim(),
       submissionsOpen: document.getElementById('adminCaptionSubmissionsOpen').checked,
-      votingOpen: document.getElementById('adminCaptionVotingOpen').checked,
       dataUrl: CAPTION_THIS_PHOTO_DATA_URL,
       fileName: CAPTION_THIS_PHOTO_FILE_NAME,
       mimeType: CAPTION_THIS_PHOTO_MIME_TYPE
@@ -5361,12 +5394,12 @@ function adminRemoveCaptionThis(button) {
       hideLoadingTorch();
       showModal('Caption Removal Error', getErrorMessage(err));
     })
-    .adminRemoveCaptionThis(ADMIN_PASSCODE, Number(document.getElementById('adminCaptionWeek').value), button.dataset.captionId);
+    .adminRemoveCaptionThis(ADMIN_PASSCODE, Number(ADMIN_CAPTION_CONTEST_WEEK || (APP_DATA && APP_DATA.weekNumber) || 1), button.dataset.captionId);
 }
 
 function adminFinalizeCaptionThis() {
   if (!window.confirm('Finalize the winning caption and award its points?')) return;
-  const week = Number(document.getElementById('adminCaptionWeek').value || 0);
+  const week = Number(ADMIN_CAPTION_CONTEST_WEEK || (APP_DATA && APP_DATA.weekNumber) || 1);
   const winnerId = document.getElementById('adminCaptionWinner').value;
   showLoadingTorch();
   google.script.run

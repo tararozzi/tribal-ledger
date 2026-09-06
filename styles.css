@@ -3447,6 +3447,7 @@ tbody tr:hover td {
 .caption-this-photo-wrap { display: flex; justify-content: center; margin: 12px 0; }
 .caption-this-photo { display: block; width: min(100%, 680px); max-height: 520px; object-fit: contain; border-radius: 10px; border: 3px solid rgba(240,184,77,.68); box-shadow: 0 12px 28px rgba(47,38,28,.22); }
 .caption-this-meta { margin: 8px 0 14px; color: #705337; font-weight: 900; }
+.caption-this-countdown { margin: -6px 0 14px; color: #31524c; font-weight: 900; text-align: center; }
 .caption-this-winner { margin: 12px auto; padding: 14px; border: 2px solid #d89120; border-radius: 10px; background: rgba(255,224,122,.24); color: #4c3218; }
 .caption-submit-form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin: 16px auto; text-align: left; }
 .caption-entries { display: grid; gap: 12px; margin-top: 18px; text-align: left; }

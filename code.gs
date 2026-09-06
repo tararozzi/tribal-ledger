@@ -61,7 +61,7 @@ const GAME_HEADERS_51 = {
   PHOTOS: ['Timestamp', 'Week', 'Name', 'Email', 'Caption', 'PhotoUrl', 'DriveFileId', 'Approved'],
   REACTIONS: ['Timestamp', 'TargetId', 'TargetType', 'Week', 'Reaction', 'SessionId', 'Name'],
   COMMENTS: ['CommentId', 'Timestamp', 'Week', 'Name', 'Comment', 'Pinned', 'Deleted', 'ParentCommentId'],
-  CAPTIONCONTESTS: ['Week', 'PhotoUrl', 'DriveFileId', 'Points', 'SubmissionsOpen', 'VotingOpen', 'WinnerCaptionId', 'Finalized', 'UpdatedAt'],
+  CAPTIONCONTESTS: ['Week', 'PhotoUrl', 'DriveFileId', 'Points', 'SubmissionsOpen', 'VotingOpen', 'WinnerCaptionId', 'Finalized', 'UpdatedAt', 'Deadline'],
   CAPTIONS: ['CaptionId', 'Timestamp', 'Week', 'Name', 'Caption', 'Deleted'],
   CAPTIONVOTES: ['Timestamp', 'Week', 'CaptionId', 'Name'],
   QUESTIONWEEKS: [

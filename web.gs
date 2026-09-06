@@ -2341,6 +2341,8 @@ function getCaptionThisData() {
 function getCaptionThisDataForWeek_(week) {
   const ss = SpreadsheetApp.getActive();
   ensureCaptionThisSheets_(ss);
+  const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
   const contest = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAPTIONCONTESTS))
     .find(row => Number(row.Week || 0) === Number(week)) || {};
   const captions = readTable_(mustGetSheet_(ss, APP_SHEETS_51.CAPTIONS))
@@ -2353,6 +2355,11 @@ function getCaptionThisDataForWeek_(week) {
     if (id) voteCounts[id] = (voteCounts[id] || 0) + 1;
   });
   const winnerId = String(contest.WinnerCaptionId || '').trim();
+  const deadlineDate = contest.Deadline ? new Date(contest.Deadline) : null;
+  const deadlineMs = deadlineDate && !isNaN(deadlineDate.getTime()) ? deadlineDate.getTime() : 0;
+  const deadlineIso = deadlineMs ? deadlineDate.toISOString() : '';
+  const finalized = String(contest.Finalized || '').toUpperCase() === 'TRUE';
+  const votingOpen = !!String(contest.PhotoUrl || '').trim() && !finalized && deadlineMs > Date.now();
   const items = captions.map(row => ({
     captionId: String(row.CaptionId || ''),
     timestamp: row.Timestamp ? new Date(row.Timestamp).toISOString() : '',
@@ -2367,9 +2374,12 @@ function getCaptionThisDataForWeek_(week) {
     active: !!String(contest.PhotoUrl || '').trim(),
     photoUrl: String(contest.PhotoUrl || ''),
     points: Number(contest.Points || 0),
-    submissionsOpen: String(contest.SubmissionsOpen || '').toUpperCase() === 'TRUE' && String(contest.Finalized || '').toUpperCase() !== 'TRUE',
-    votingOpen: String(contest.VotingOpen || '').toUpperCase() === 'TRUE' && String(contest.Finalized || '').toUpperCase() !== 'TRUE',
-    finalized: String(contest.Finalized || '').toUpperCase() === 'TRUE',
+    deadlineIso,
+    deadlineInput: deadlineMs ? Utilities.formatDate(deadlineDate, timezone, "yyyy-MM-dd'T'HH:mm") : '',
+    deadlineLabel: deadlineMs ? Utilities.formatDate(deadlineDate, timezone, 'EEEE, MMMM d') + ' at ' + Utilities.formatDate(deadlineDate, timezone, 'h:mm a') : '',
+    submissionsOpen: String(contest.SubmissionsOpen || '').toUpperCase() === 'TRUE' && !finalized,
+    votingOpen,
+    finalized,
     winnerCaptionId: winnerId,
     winner,
     captions: items
@@ -2389,8 +2399,11 @@ function adminSaveCaptionThis(passcode, payload) {
   const config = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
   const week = Number(payload.week || config.WeekNumber || 1);
   const points = Number(payload.points || 0);
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const deadlineIso = parseCaptionDeadlineIso_(payload.deadline, timezone);
   if (!week) throw new Error('Choose a valid Caption This week.');
   if (!Number.isFinite(points) || points < 0) throw new Error('Caption This points must be zero or greater.');
+  if (!deadlineIso) throw new Error('Set a valid Caption This deadline date and time.');
 
   const sheet = mustGetSheet_(ss, APP_SHEETS_51.CAPTIONCONTESTS);
   const rows = readTable_(sheet);
@@ -2421,16 +2434,27 @@ function adminSaveCaptionThis(passcode, payload) {
     DriveFileId: driveFileId,
     Points: points,
     SubmissionsOpen: payload.submissionsOpen ? 'TRUE' : 'FALSE',
-    VotingOpen: payload.votingOpen ? 'TRUE' : 'FALSE',
+    VotingOpen: 'TRUE',
     WinnerCaptionId: String(existing.WinnerCaptionId || ''),
     Finalized: String(existing.Finalized || 'FALSE'),
-    UpdatedAt: new Date()
+    UpdatedAt: new Date(),
+    Deadline: new Date(deadlineIso)
   };
   const values = headers.map(header => record[header] !== undefined ? record[header] : '');
   if (existingIndex >= 0) sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
   else sheet.appendRow(values);
   logAdminChange51_({ action: 'Save Caption This', section: 'Caption This', record: 'Week ' + week, newValue: points + ' points', week });
   return { ok: true, message: 'Caption This contest saved.', contest: getCaptionThisDataForWeek_(week) };
+}
+
+function parseCaptionDeadlineIso_(value, timezone) {
+  const raw = String(value || '').trim();
+  const localMatch = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/);
+  if (localMatch) {
+    return computeLocalDateTimeIso_(localMatch[1], Number(localMatch[2]) * 60 + Number(localMatch[3]), timezone);
+  }
+  const parsed = new Date(raw);
+  return raw && !isNaN(parsed.getTime()) ? parsed.toISOString() : '';
 }
 
 function submitCaptionThis(week, caption, name, tribalKey) {
