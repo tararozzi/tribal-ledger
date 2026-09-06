@@ -304,11 +304,11 @@ function getAppData() {
     contentBlocks: {
       campAnnouncementsTitle: sanitizeHtml_(String(config.CampAnnouncementsTitle || 'Camp Announcements')),
       campAnnouncements: [
-        sanitizeHtml_(String(config.CampAnnouncement1 || '').trim()),
-        sanitizeHtml_(String(config.CampAnnouncement2 || '').trim()),
-        sanitizeHtml_(String(config.CampAnnouncement3 || '').trim()),
-        sanitizeHtml_(String(config.CampAnnouncement4 || '').trim()),
-        sanitizeHtml_(String(config.CampAnnouncement5 || '').trim())
+        cleanOptionalHtml_(config.CampAnnouncement1),
+        cleanOptionalHtml_(config.CampAnnouncement2),
+        cleanOptionalHtml_(config.CampAnnouncement3),
+        cleanOptionalHtml_(config.CampAnnouncement4),
+        cleanOptionalHtml_(config.CampAnnouncement5)
       ].filter(Boolean),
       atAGlanceTitle: getCampRulesTitle_(config),
       atAGlance: [
@@ -1896,11 +1896,11 @@ function adminSaveContentBlocks(passcode, payload) {
   if (saveCamp) {
     setConfigValue_(configSheet, 'CampAnnouncementsTitle', sanitizeHtml_(String(payload.campAnnouncementsTitle || '').trim()));
     setConfigValue_(configSheet, 'EntryFeeAmount', normalizeEntryFeeAmount_(payload.entryFeeAmount));
-    setConfigValue_(configSheet, 'CampAnnouncement1', sanitizeHtml_(String(payload.campAnnouncement1 || '').trim()));
-    setConfigValue_(configSheet, 'CampAnnouncement2', sanitizeHtml_(String(payload.campAnnouncement2 || '').trim()));
-    setConfigValue_(configSheet, 'CampAnnouncement3', sanitizeHtml_(String(payload.campAnnouncement3 || '').trim()));
-    setConfigValue_(configSheet, 'CampAnnouncement4', sanitizeHtml_(String(payload.campAnnouncement4 || '').trim()));
-    setConfigValue_(configSheet, 'CampAnnouncement5', sanitizeHtml_(String(payload.campAnnouncement5 || '').trim()));
+    setConfigValue_(configSheet, 'CampAnnouncement1', cleanOptionalHtml_(payload.campAnnouncement1));
+    setConfigValue_(configSheet, 'CampAnnouncement2', cleanOptionalHtml_(payload.campAnnouncement2));
+    setConfigValue_(configSheet, 'CampAnnouncement3', cleanOptionalHtml_(payload.campAnnouncement3));
+    setConfigValue_(configSheet, 'CampAnnouncement4', cleanOptionalHtml_(payload.campAnnouncement4));
+    setConfigValue_(configSheet, 'CampAnnouncement5', cleanOptionalHtml_(payload.campAnnouncement5));
     setConfigValue_(configSheet, 'AtAGlanceTitle', sanitizeHtml_(String(payload.atAGlanceTitle || '').trim()));
     setConfigValue_(configSheet, 'AtAGlance1', sanitizeHtml_(String(payload.atAGlance1 || '').trim()));
     setConfigValue_(configSheet, 'AtAGlance2', sanitizeHtml_(String(payload.atAGlance2 || '').trim()));
@@ -3153,4 +3153,16 @@ function sanitizeHtml_(html) {
   }
   output += escapeText_(source.slice(cursor));
   return output;
+}
+
+function cleanOptionalHtml_(html) {
+  const sanitized = sanitizeHtml_(String(html || '').trim());
+  const visibleText = sanitized
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp;)*nbsp;|&#(?:160|x0*a0);|\u00a0/gi, ' ')
+    .replace(/&[a-z0-9#]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return visibleText ? sanitized : '';
 }

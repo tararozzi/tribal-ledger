@@ -5018,9 +5018,8 @@ function renderContentBlocks(blocks) {
   const phaseMessages = (APP_DATA && APP_DATA.seasonPhase && APP_DATA.seasonPhase.messages) || {};
   const camp = document.getElementById('campAnnouncementsList');
   camp.innerHTML = '';
-  const campItems = (blocks.campAnnouncements && blocks.campAnnouncements.length)
-    ? blocks.campAnnouncements
-    : [phaseMessages.bannerBody, phaseMessages.reminder].filter(Boolean);
+  const savedCampItems = (blocks.campAnnouncements || []).filter(text => stripHtml(text));
+  const campItems = savedCampItems;
   uniqueBy_(campItems, text => stripHtml(text).toLowerCase()).forEach(text => {
     const div = document.createElement('div');
     div.className = 'announcement admin-entry-text';
