@@ -6812,7 +6812,29 @@ function adminPinComment(commentId, pinned) {
 }
 
 function enhanceRichTextToolbars() {
-  document.querySelectorAll('.toolbar').forEach(toolbar => {
+  const adminPanel = document.getElementById('adminPanel');
+  if (!adminPanel) return;
+
+  adminPanel.querySelectorAll('.rich-editor[contenteditable="true"]').forEach(editor => {
+    let toolbar = editor.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('toolbar')) {
+      toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+      toolbar.dataset.editor = editor.id;
+      editor.parentNode.insertBefore(toolbar, editor);
+    }
+
+    if (editor.dataset.indentKeys !== 'true') {
+      editor.addEventListener('keydown', event => {
+        if (event.key !== 'Tab') return;
+        event.preventDefault();
+        document.execCommand(event.shiftKey ? 'outdent' : 'indent', false, null);
+      });
+      editor.dataset.indentKeys = 'true';
+    }
+  });
+
+  adminPanel.querySelectorAll('.toolbar').forEach(toolbar => {
     let editor = null;
     const editorId = toolbar.dataset.editor;
     if (editorId) editor = document.getElementById(editorId);
@@ -6827,6 +6849,9 @@ function enhanceRichTextToolbars() {
       { label: 'Italic', command: 'italic', html: '<i>I</i>' },
       { label: 'Underline', command: 'underline', html: '<u>U</u>' },
       { label: 'List', command: 'insertUnorderedList', html: '&bull; List' },
+      { label: 'Numbered list', command: 'insertOrderedList', html: '1. List' },
+      { label: 'Decrease indent', command: 'outdent', html: '&larr; Indent' },
+      { label: 'Increase indent', command: 'indent', html: 'Indent &rarr;' },
       { label: 'Link', command: 'link', html: 'Link' }
     ];
 
