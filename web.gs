@@ -2631,10 +2631,36 @@ function getRevealStatus_(config, timezone) {
 function getEpisodeStatus_(config, timezone) {
   const now = new Date();
   const rule = parseRule_(config.EpisodeDay, config.EpisodeTime);
+  const firstEpisodeDate = String(config.FirstEpisodeDate || '2026-09-23').trim();
+  const firstEpisodeIso = computeLocalDateTimeIso_(firstEpisodeDate, rule.totalMinutes, timezone);
+  const beforeFirstEpisode = firstEpisodeIso && now.getTime() < new Date(firstEpisodeIso).getTime();
+  const currentWeek = Number(config.WeekNumber || 1);
+  const finalWeek = Number(config.FinalWeek || 0);
+  const isFinalEpisode = finalWeek > 0 && currentWeek >= finalWeek;
   return {
-    label: buildRuleLabel_(config.EpisodeDay, config.EpisodeTime),
-    nextEpisodeIso: computeNextOccurrenceIso_(now, timezone, rule.dayNum, rule.totalMinutes)
+    heading: beforeFirstEpisode ? 'First episode airs' : (isFinalEpisode ? 'Final episode airs' : 'Next episode airs'),
+    label: beforeFirstEpisode
+      ? Utilities.formatDate(new Date(firstEpisodeIso), timezone, 'EEEE, MMMM d • h:mm a')
+      : buildRuleLabel_(config.EpisodeDay, config.EpisodeTime),
+    nextEpisodeIso: beforeFirstEpisode
+      ? firstEpisodeIso
+      : computeNextOccurrenceIso_(now, timezone, rule.dayNum, rule.totalMinutes)
   };
+}
+
+function computeLocalDateTimeIso_(dateText, totalMinutes, timezone) {
+  const match = String(dateText || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match || totalMinutes == null) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  const approximate = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const offset = Utilities.formatDate(approximate, timezone, 'Z');
+  const sign = offset.charAt(0) === '-' ? -1 : 1;
+  const offsetMinutes = sign * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(3, 5)));
+  return new Date(approximate.getTime() - offsetMinutes * 60000).toISOString();
 }
 
 function parseRule_(day, time) {

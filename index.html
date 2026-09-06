@@ -3566,7 +3566,7 @@ tbody tr:hover td {
 
           <div class="countdowns">
             <div class="countdown-box episode-countdown-box">
-              <div class="countdown-label">Next episode airs</div>
+              <div class="countdown-label" id="episodeCountdownLabel">First episode airs</div>
               <div class="countdown-time" id="episodeLabel">Wednesday 8:00 PM</div>
               <div class="countdown-live" id="episodeLive">--</div>
             </div>
@@ -4821,6 +4821,7 @@ function loadAppData() {
 }
 
 function renderApp(data) {
+  data.episode = getClientEpisodeDisplay_(data);
   syncLedgerPlayerColumnWidth_((data.players || []).map(player => player.name));
   const phase = data.seasonPhase || {};
   const phaseMessages = phase.messages || {};
@@ -4848,6 +4849,7 @@ function renderApp(data) {
   document.getElementById('heroTitle').textContent = phaseMessages.heroTitle || `Week ${data.weekNumber}: Welcome back to camp.`;
   document.getElementById('heroSubtitle').textContent = phaseMessages.heroSubtitle || `Voting ${data.voting.statusText.toLowerCase()}. Public picks reveal ${data.reveal.revealLabel}.`;
   document.getElementById('episodeLabel').textContent = data.episode.label || 'Wednesday 8:00 PM';
+  document.getElementById('episodeCountdownLabel').textContent = data.episode.heading || 'Next episode airs';
   document.getElementById('votingOpenSchedule').textContent = data.voting.openLabel || 'Not set';
   document.getElementById('votingDeadlineSchedule').textContent = data.voting.deadlineLabel || 'Not set';
   document.getElementById('picksRevealSchedule').textContent = data.reveal.revealLabel || 'Not set';
@@ -4899,6 +4901,23 @@ function renderApp(data) {
   }
   document.getElementById('myGameWeek').value = data.weekNumber;
   syncRegistrationState();
+}
+
+function getClientEpisodeDisplay_(data) {
+  const episode = Object.assign({}, data.episode || {});
+  if (episode.heading) return episode;
+  const firstEpisodeIso = '2026-09-24T03:00:00.000Z';
+  if (Date.now() < new Date(firstEpisodeIso).getTime()) {
+    episode.heading = 'First episode airs';
+    episode.label = 'Wednesday, September 23 • 8:00 PM';
+    episode.nextEpisodeIso = firstEpisodeIso;
+  } else {
+    const finalWeek = Number(data.finalWeek || 0);
+    episode.heading = finalWeek > 0 && Number(data.weekNumber || 0) >= finalWeek
+      ? 'Final episode airs'
+      : 'Next episode airs';
+  }
+  return episode;
 }
 
 function renderSeasonPhaseBanner(phase) {

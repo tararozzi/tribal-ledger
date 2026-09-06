@@ -183,6 +183,7 @@ function seedAppConfigIfMissing_() {
     EntryFeeAmount: '20',
     EpisodeDay: 'Wednesday',
     EpisodeTime: '8:00 PM',
+    FirstEpisodeDate: '2026-09-23',
     AdminPasscode: '',
     LimitedAdminPasscodes: '',
     AdminEmail: Session.getActiveUser().getEmail() || '',
