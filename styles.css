@@ -3473,3 +3473,6 @@ tbody tr:hover td {
 .recap-comment-reply { background: rgba(255, 253, 247, 0.72); }
 #interactionAuthStatus { min-height: 1.4em; margin-top: 10px; color: #9a321f; font-weight: 800; }
 @media (max-width: 640px) { .recap-comment-replies { margin-left: 10px; } }
+
+/* Display all player rows while retaining horizontal navigation. */
+.season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }

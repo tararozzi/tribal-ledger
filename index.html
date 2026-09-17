@@ -3525,6 +3525,9 @@ tbody tr:hover td {
 .admin-caption-entries { display: grid; gap: 10px; margin: 16px 0; }
 .admin-caption-entry { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid rgba(47,113,108,.22); border-radius: 8px; background: rgba(255,253,247,.78); }
 @media (max-width: 640px) { .caption-submit-form, .admin-caption-entry { grid-template-columns: 1fr; } .caption-entry-footer { align-items: flex-start; flex-direction: column; } }
+
+/* Display all player rows while retaining horizontal navigation. */
+.season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }
 </style>
 </head>
 <body>
@@ -3894,7 +3897,7 @@ tbody tr:hover td {
                 <button class="btn btn-danger" type="button" onclick="adminSetVoting(false)">Close Voting</button>
                 <button class="btn btn-secondary" type="button" onclick="loadAdminDashboard()">Refresh Council Status</button>
               </div>
-              <div class="tiny-note">Saving the schedule activates automatic voting. The Open Voting and Close Voting buttons temporarily override the schedule.</div>
+              <div class="tiny-note">Automatic weeks start Monday, September 21, 2026 at 12:00 AM Pacific. Saving the schedule resumes automatic weeks and voting. Setting a week manually pauses automatic weeks. Voting overrides expire at the next scheduled opening or closing.</div>
               <div class="tiny-note">Refresh Council Status reloads the current week, voting status, deadline and reveal schedule, season phase, submission totals, scoring summary, saved questions, castaway bios, comments, and reaction settings from the spreadsheet.</div>
               <div id="adminStatusBox" class="admin-status-box"></div>
             </div>
@@ -4847,8 +4850,8 @@ function scrollAdminSection(sectionId) {
 }
 
 function applyAdminAccessRole(role) {
-  ADMIN_ACCESS_ROLE = role === 'master' ? 'master' : 'limited';
-  const allowed = new Set(['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection', 'adminCaptionThisSection']);
+  ADMIN_ACCESS_ROLE = ['master', 'limited', 'recap'].includes(role) ? role : '';
+  const allowed = new Set(ADMIN_ACCESS_ROLE === 'recap' ? ['adminRecapSection'] : ['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection', 'adminCaptionThisSection']);
   document.querySelectorAll('.admin-scroll-target').forEach(section => {
     section.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && !allowed.has(section.id));
   });
@@ -6499,6 +6502,13 @@ function loadAdminDashboard() {
 
   google.script.run
     .withSuccessHandler(data => {
+      applyAdminAccessRole(data.accessRole || ADMIN_ACCESS_ROLE);
+      if (ADMIN_ACCESS_ROLE === 'recap') {
+        const recapWeek = document.getElementById('adminRecapWeek');
+        if (!recapWeek.value) recapWeek.value = data.weekNumber || 1;
+        captureAdminSavedState();
+        return;
+      }
       const box = document.getElementById('adminStatusBox');
       box.innerHTML = `
         <strong>Current Week:</strong> ${escapeHtml(String(data.weekNumber || ''))}<br>
