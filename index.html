@@ -3586,7 +3586,8 @@ tbody tr:hover td {
 
         <div class="hero-center-logo">
           <img 
-            src="https://lh3.googleusercontent.com/d/18GOagtLjKwf6xRtgIrqfT4j7BJoSNUPg" 
+            id="seasonLogo"
+            src="https://lh3.googleusercontent.com/d/1yxisgJAUgyEuGjmkSBfjEt3eWgvxRpxJ" 
             alt="Fantasy Survivor 51 Logo">
         </div>
 
@@ -4908,7 +4909,26 @@ function loadAppData() {
     .getAppData();
 }
 
+function getLogoImageUrl_(value) {
+  const fallback = 'https://lh3.googleusercontent.com/d/1yxisgJAUgyEuGjmkSBfjEt3eWgvxRpxJ';
+  try {
+    const url = new URL(String(value || '').trim());
+    if (url.protocol !== 'https:') return fallback;
+    if (url.hostname === 'drive.google.com') {
+      const match = url.pathname.match(/^\/file\/d\/([\w-]+)/);
+      const id = match ? match[1] : url.searchParams.get('id');
+      return id && /^[\w-]+$/.test(id) ? 'https://lh3.googleusercontent.com/d/' + id : fallback;
+    }
+    return url.href;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function renderApp(data) {
+  const logo = document.getElementById('seasonLogo');
+  const logoUrl = getLogoImageUrl_(data.logoUrl);
+  if (logo && logo.src !== logoUrl) logo.src = logoUrl;
   data.episode = getClientEpisodeDisplay_(data);
   syncLedgerPlayerColumnWidth_((data.players || []).map(player => player.name));
   const phase = data.seasonPhase || {};
