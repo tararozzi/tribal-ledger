@@ -396,39 +396,7 @@ function getInteractionConfig_(config) {
 }
 
 function registerPlayer(name, tribalKey, entryFeeAcknowledged) {
-  const cleanName = normalizePlayerDisplayName51_(name);
-  const cleanKey = String(tribalKey || '').trim();
-  if (!cleanName) throw new Error('Enter your castaway name.');
-  if (!cleanKey) throw new Error('Enter your tribal key.');
-  if (entryFeeAcknowledged !== true) {
-    throw new Error('You must acknowledge the season entry fee before registering.');
-  }
-
-  const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
-  try {
-    const ss = SpreadsheetApp.getActive();
-    ensureSheetWithHeaders_(ss, APP_SHEETS_51.PLAYERS, GAME_HEADERS_51.PLAYERS);
-    const sheet = mustGetSheet_(ss, APP_SHEETS_51.PLAYERS);
-    const headers = getHeaders_(sheet);
-    const rows = readTable_(sheet);
-    const existing = rows.some(row => nameKey51_(row.Name) === nameKey51_(cleanName));
-
-    if (existing) {
-      throw new Error('That castaway name is already registered. Use the Tribal Key already assigned to that player to submit picks; the stored key cannot be replaced here.');
-    }
-
-    const record = {
-      Name: cleanName,
-      Active: 'TRUE',
-      TribalKey: cleanKey
-    };
-    const values = headers.map(header => record[header] !== undefined ? record[header] : '');
-    sheet.appendRow(values);
-    return { ok: true, name: cleanName, message: 'Your castaway registration has been added to the tribe roster.' };
-  } finally {
-    lock.releaseLock();
-  }
+  throw new Error('Registration is closed. Existing players can log in to vote.');
 }
 
 function getSeasonPhase_(config, currentWeek, finalWeek) {
@@ -869,7 +837,7 @@ function upsertPickRecord_(payload, options) {
   const rows = readTable_(sheet);
 
   const week = Number(payload.week || 0);
-  const playerName = String(payload.name || '').trim();
+  const playerName = String(payload.name || '');
   const key = `${week}||${nameKey51_(playerName)}`;
 
   let existingRowNumber = null;
@@ -930,7 +898,7 @@ function validateSubmissionPayload_(payload, isAdmin) {
   const tribalKey = String(payload.tribalKey || '').trim();
   const week = Number(payload.week || 0);
 
-  if (!name) throw new Error('Please enter your name.');
+  if (!nameKey51_(name)) throw new Error('Please enter your name.');
   if (!week) throw new Error('Missing week number.');
 
   ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'].forEach(key => {
@@ -969,7 +937,7 @@ function validateSubmissionPayload_(payload, isAdmin) {
     }
 
     const verifiedPlayer = verifyPlayerTribalKeyOrThrow_(players, name, tribalKey);
-    payload.name = String(verifiedPlayer.Name || name).trim();
+    payload.name = String(verifiedPlayer.Name || name);
   }
 }
 
@@ -2322,7 +2290,7 @@ function verifyInteractionPlayer(name, tribalKey) {
   const players = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.PLAYERS))
     .filter(player => String(player.Active || '').trim().toUpperCase() !== 'FALSE');
   const player = verifyPlayerTribalKeyOrThrow_(players, normalizePlayerDisplayName51_(name), tribalKey);
-  return { ok: true, name: String(player.Name || '').trim() };
+  return { ok: true, name: String(player.Name || '') };
 }
 
 

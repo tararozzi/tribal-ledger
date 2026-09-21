@@ -1049,16 +1049,8 @@ function nameKey51_(value) {
 }
 
 function normalizePlayerDisplayName51_(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map(word => {
-      const lower = word.toLowerCase();
-      return lower.length <= 3 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(' ');
+  // Normalize only comparison keys; retain the roster spelling for display.
+  return String(value || '');
 }
 
 function denseRank51_(values) {

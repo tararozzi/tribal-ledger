@@ -3612,8 +3612,8 @@ tbody tr:hover td {
         </div>
 
         <div class="hero-actions">
-          <button id="voteBtn" class="btn vote-btn closed described-btn" data-description="Register for the season, then return here to cast your weekly vote." onclick="handlePrimaryAction()">
-            Voting
+          <button id="voteBtn" class="btn vote-btn closed described-btn" data-description="Log in with your existing Castaway Name and Tribal Key to vote." onclick="handlePrimaryAction()">
+            Log In to Vote
           </button>
           <button class="btn btn-secondary described-btn" data-description="Meet the castaways and view their game status and biographies." onclick="showSection('castStatus')">Cast Status</button>
           <button class="btn btn-secondary described-btn" data-description="Read the results and highlights from each completed week." onclick="showSection('recap')">Weekly Recaps</button>
@@ -3675,34 +3675,7 @@ tbody tr:hover td {
         </div>
       </section>
 
-      <section id="register" class="section">
-        <div class="card">
-          <div id="registerCastawayBox" class="register-castaway-box">
-            <h3 class="section-title mini">Register Castaway</h3>
-            <p class="subtle">Join the season before weekly voting begins. Create your castaway name and private Tribal Key; you will use both when casting votes.</p>
-            <div class="admin-grid compact-admin-grid">
-              <div>
-                <label class="admin-label" for="registerPlayerName">Castaway Name</label>
-                <input id="registerPlayerName" class="text-input" placeholder="Enter your castaway name" oninput="syncRegistrationState()" onblur="normalizePlayerNameInput_(this); syncRegistrationState()">
-              </div>
-              <div>
-                <label class="admin-label" for="registerTribalKey">Tribal Key</label>
-                <input id="registerTribalKey" class="text-input" type="password" autocomplete="new-password" placeholder="Create a tribal key for a new player">
-              </div>
-              <div class="admin-action-cell">
-                <button id="registerCastawayBtn" class="btn btn-secondary" type="button" onclick="registerCastaway()">Register</button>
-              </div>
-            </div>
-            <label class="entry-fee-acknowledgment" for="registerEntryFeeAck">
-              <input id="registerEntryFeeAck" type="checkbox">
-              <span id="entryFeeAcknowledgmentText">I acknowledge that I will pay the $20 entry fee to join the tribe this season.</span>
-            </label>
-            <div id="registerCastawayStatus" class="tiny-note"></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="picks" class="section">
+<section id="picks" class="section">
         <div class="card">
           <h2 class="section-title" id="votingBoardTitle">Survivor Voting Board</h2>
           <p class="subtle">Submit your predictions for the selected week before voting closes. Each question shows the answer choices and points available.</p>
@@ -3711,7 +3684,7 @@ tbody tr:hover td {
           <form id="picksForm">
             <div class="question-block">
               <div class="question-title">Player Name</div>
-              <input id="playerName" class="text-input" placeholder="Enter your name exactly as listed" onblur="normalizePlayerNameInput_(this)">
+              <input id="playerName" class="text-input" placeholder="Enter your Castaway Name" onblur="normalizePlayerNameInput_(this)">
             </div>
 
             <div class="question-block">
@@ -4630,7 +4603,7 @@ tbody tr:hover td {
     <div class="modal-card parchment">
       <div class="modal-title" id="interactionAuthTitle">Castaway Sign In</div>
       <div class="modal-body">
-        <p>Enter your registered Castaway Name and Tribal Key to comment, reply, or react.</p>
+        <p>Enter your existing Castaway Name and Tribal Key to vote, comment, reply, or react. Registration is closed.</p>
         <label class="admin-label" for="interactionAuthName">Castaway Name</label>
         <input id="interactionAuthName" class="text-input" autocomplete="username" onblur="normalizePlayerNameInput_(this)">
         <label class="admin-label" for="interactionAuthKey">Tribal Key</label>
@@ -4774,6 +4747,7 @@ function handlePlainTextPaste(event) {
 }
 
 function showSection(sectionId) {
+  if (sectionId === 'register') return handlePrimaryAction();
   const activeSection = document.querySelector('.section.active');
   if (activeSection && activeSection.id === 'admin' && sectionId !== 'admin' && hasUnsavedAdminChanges()) {
     showConfirmModal('Unsaved Admin Changes', 'You have unsaved changes in Admin. Leave without saving them?', () => {
@@ -4947,11 +4921,8 @@ function renderApp(data) {
     voteBtn.classList.toggle('open', isOpen);
     voteBtn.classList.toggle('closed', !isOpen);
 
-    const registered = isCurrentVisitorRegistered_();
-    voteBtn.textContent = registered ? 'Cast Your Vote' : 'Register';
-    voteBtn.dataset.description = registered
-      ? 'Open the weekly voting questions and submit your picks before the deadline.'
-      : 'Register your castaway name and create a private Tribal Key before weekly voting begins.';
+    voteBtn.textContent = 'Log In to Vote';
+    voteBtn.dataset.description = 'Log in with your existing Castaway Name and Tribal Key to vote.';
   }
 
   document.getElementById('heroTitle').textContent = phaseMessages.heroTitle || `Week ${data.weekNumber}: Welcome back to camp.`;
@@ -5006,11 +4977,8 @@ function renderApp(data) {
     document.getElementById('savedNameDisplay').textContent = savedName;
     document.getElementById('playerName').value = savedName;
     document.getElementById('myGameName').value = savedName;
-    const registerName = document.getElementById('registerPlayerName');
-    if (registerName) registerName.value = savedName;
   }
   document.getElementById('myGameWeek').value = data.weekNumber;
-  syncRegistrationState();
 }
 
 function getClientEpisodeDisplay_(data) {
@@ -5901,16 +5869,7 @@ function normalizePlayerNameKey_(value) {
 }
 
 function formatPlayerDisplayName_(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map(word => {
-      const lower = word.toLowerCase();
-      return lower.length <= 3 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(' ');
+  return String(value || '');
 }
 
 function normalizePlayerNameInput_(input) {
@@ -5926,93 +5885,12 @@ function isExistingRosterName_(name) {
   return rosterNames.some(rosterName => normalizePlayerNameKey_(rosterName) === key);
 }
 
-function isCurrentVisitorRegistered_() {
-  return isExistingRosterName_(localStorage.getItem('survivor51_name') || '');
-}
-
 function handlePrimaryAction() {
-  showSection(isCurrentVisitorRegistered_() ? 'picks' : 'register');
-}
-
-function syncRegistrationState() {
-  const nameInput = document.getElementById('registerPlayerName');
-  const keyInput = document.getElementById('registerTribalKey');
-  const registerBtn = document.getElementById('registerCastawayBtn');
-  const status = document.getElementById('registerCastawayStatus');
-  if (!nameInput || !keyInput || !registerBtn) return;
-
-  const exists = isExistingRosterName_(nameInput.value);
-  keyInput.disabled = exists;
-  registerBtn.disabled = exists;
-  if (exists) {
-    keyInput.value = '';
-    keyInput.placeholder = 'Existing Tribal Key cannot be changed';
-    if (status) status.textContent = 'This player is already on the roster. Enter the existing Tribal Key in the picks form below.';
-  } else {
-    keyInput.placeholder = 'Create a tribal key for a new player';
-    if (status && status.textContent.startsWith('This player is already')) status.textContent = '';
-  }
-}
-
-function registerCastaway() {
-  const nameInput = document.getElementById('registerPlayerName');
-  const keyInput = document.getElementById('registerTribalKey');
-  const status = document.getElementById('registerCastawayStatus');
-  const name = formatPlayerDisplayName_(nameInput.value);
-  nameInput.value = name;
-  const tribalKey = keyInput.value.trim();
-  const entryFeeAcknowledged = document.getElementById('registerEntryFeeAck').checked;
-
-  if (isExistingRosterName_(name)) {
-    syncRegistrationState();
-    showModal('Already Registered', 'This player is already on the roster. Use the existing Tribal Key in the picks form; it cannot be replaced here.');
-    return;
-  }
-
-  if (!name || !tribalKey) {
-    showModal('Missing Registration', 'Enter your castaway name and tribal key.');
-    return;
-  }
-
-  if (!entryFeeAcknowledged) {
-    showModal('Entry Fee Acknowledgment Required', `Please acknowledge that you will pay the $${(APP_DATA && APP_DATA.entryFeeAmount) || '20'} entry fee to join the tribe this season.`);
-    return;
-  }
-
-  if (status) status.textContent = 'Adding you to the tribe roster...';
-  const registerButton = document.getElementById('registerCastawayBtn');
-  if (registerButton) registerButton.disabled = true;
-  showLoadingTorch();
-  google.script.run
-    .withSuccessHandler(r => {
-      hideLoadingTorch();
-      if (registerButton) registerButton.disabled = false;
-      const savedName = (r && r.name) || name;
-      localStorage.setItem('survivor51_name', savedName);
-      document.getElementById('savedNameDisplay').textContent = savedName;
-      document.getElementById('playerName').value = savedName;
-      document.getElementById('playerTribalKey').value = tribalKey;
-      document.getElementById('myGameName').value = savedName;
-      if (status) status.textContent = r.message || 'Castaway registered.';
-      if (APP_DATA && Array.isArray(APP_DATA.players) && !isExistingRosterName_(savedName)) {
-        APP_DATA.players.push({ name: savedName });
-      }
-      const voteBtn = document.getElementById('voteBtn');
-      if (voteBtn) {
-        voteBtn.textContent = 'Cast Your Vote';
-        voteBtn.dataset.description = 'Open the weekly voting questions and submit your picks before the deadline.';
-      }
-      showModal('Castaway Registered', r.message || 'Your castaway registration has been saved.');
-      loadAppData();
-    })
-    .withFailureHandler(err => {
-      hideLoadingTorch();
-      hideLoadingTorch();
-      if (registerButton) registerButton.disabled = false;
-      if (status) status.textContent = `Registration failed: ${getErrorMessage(err)}`;
-      showModal('Registration Error', getErrorMessage(err));
-    })
-    .registerPlayer(name, tribalKey, entryFeeAcknowledged);
+  withVerifiedInteraction_(credentials => {
+    document.getElementById('playerName').value = credentials.name;
+    document.getElementById('playerTribalKey').value = credentials.tribalKey;
+    showSection('picks');
+  });
 }
 
 function handleSubmit(event) {
