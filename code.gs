@@ -1116,13 +1116,4 @@ function runScheduledMissingPicks() {
   return autoFillMissingPicks();
 }
 
-// Owner-only installer; running it never assigns a player's picks.
-function installMissedPicksAutomation() {
-  const active = Session.getActiveUser().getEmail();
-  if (!active || active !== Session.getEffectiveUser().getEmail()) throw new Error('Project owner required.');
-  const matches = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'runScheduledMissingPicks');
-  if (!matches.length) ScriptApp.newTrigger('runScheduledMissingPicks').timeBased().everyMinutes(1).create();
-  matches.slice(1).forEach(t => ScriptApp.deleteTrigger(t));
-  console.log('Missed-pick automation active: every minute; assignment eligible 30 minutes after configured voting close.');
-}
 
