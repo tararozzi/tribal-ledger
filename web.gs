@@ -217,6 +217,7 @@ function getVercelRpcHandlers_() {
     getAdminResultAnswerChoices,
     getAppData,
     getVotingAccess,
+    getScheduleHighlights,
     getAvailablePickWeeks,
     getBonusLog,
     getCaptionThisData,
@@ -3188,4 +3189,36 @@ function getVotingAccess(name, tribalKey) {
     status.questions = getQuestionDefinitions_(getQuestionConfigForWeek_(status.weekNumber, config), cast);
   }
   return status;
+}
+
+// Display-only event queue; never changes voting state or invokes pick assignment.
+function getScheduleHighlights() {
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const now = new Date();
+  const clock = getSeasonClock51_(config, now);
+  const events = [];
+  const rules = [
+    ['open', config.OpenDay || 'Monday', config.OpenTime || '12:00 AM'],
+    ['deadline', config.CloseDay, config.CloseTime],
+    ['reveal', config.RevealDay || config.EpisodeDay, config.RevealTime || config.EpisodeTime],
+    ['episode', config.EpisodeDay, config.EpisodeTime]
+  ];
+  if (!clock || !clock.afterSeason) rules.forEach(([key, day, time]) => {
+    const rule = parseRule_(day, time);
+    let cursor = clock && clock.beforeStart ? new Date(Date.parse(clock.startIso) - 1) : now;
+    if (key === 'episode') {
+      const first = Date.parse(computeLocalDateTimeIso_(String(config.FirstEpisodeDate || '2026-09-23'), rule.totalMinutes, timezone));
+      if (first > cursor.getTime()) cursor = new Date(first - 1);
+    }
+    for (let i = 0; i < 4; i++) {
+      const iso = computeNextOccurrenceIso_(cursor, timezone, rule.dayNum, rule.totalMinutes);
+      const eventClock = getSeasonClock51_(config, new Date(iso));
+      if (eventClock && eventClock.afterSeason) break;
+      events.push({key, iso});
+      cursor = new Date(iso);
+    }
+  });
+  events.sort((a, b) => Date.parse(a.iso) - Date.parse(b.iso));
+  return {serverNow: now.getTime(), timezone, events};
 }

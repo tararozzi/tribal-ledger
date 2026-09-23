@@ -3528,6 +3528,34 @@ tbody tr:hover td {
 
 /* Display all player rows while retaining horizontal navigation. */
 .season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }
+/* The existing boxes keep their dimensions and styling until they are next. */
+.countdown-box[data-schedule-event], .main-schedule-item[data-schedule-event] {
+  position: relative;
+}
+.countdown-box.schedule-up-next, .main-schedule-item.schedule-up-next {
+  border-color: #f2c46c;
+  outline: 1px solid rgba(242, 196, 108, .65);
+  box-shadow: 0 0 18px rgba(240, 184, 77, .28), inset 0 0 14px rgba(240, 184, 77, .09);
+}
+.schedule-up-next-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  border: 1px solid #f2c46c;
+  border-radius: 999px;
+  background: #352b1c;
+  color: #ffe4a5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 16px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.schedule-up-next-badge[hidden] { display: none; }
+
 </style>
 </head>
 <body>
@@ -3598,15 +3626,15 @@ tbody tr:hover td {
           </div>
 
           <div class="countdowns">
-            <div class="countdown-box episode-countdown-box">
+            <div class="countdown-box episode-countdown-box" data-schedule-event="episode"><span class="schedule-up-next-badge" hidden>Up Next</span>
               <div class="countdown-label" id="episodeCountdownLabel">First episode airs</div>
               <div class="countdown-time" id="episodeLabel">Wednesday 8:00 PM</div>
               <div class="countdown-live" id="episodeLive">--</div>
             </div>
             <div class="main-schedule-grid" aria-label="Voting and picks schedule">
-              <div class="main-schedule-item"><div class="main-schedule-label">Voting Opens</div><div class="main-schedule-time" id="votingOpenSchedule">Loading…</div></div>
-              <div class="main-schedule-item"><div class="main-schedule-label">Voting Deadline</div><div class="main-schedule-time" id="votingDeadlineSchedule">Loading…</div></div>
-              <div class="main-schedule-item"><div class="main-schedule-label">Picks Reveal</div><div class="main-schedule-time" id="picksRevealSchedule">Loading…</div></div>
+              <div class="main-schedule-item" data-schedule-event="open"><span class="schedule-up-next-badge" hidden>Up Next</span><div class="main-schedule-label">Voting Opens</div><div class="main-schedule-time" id="votingOpenSchedule">Loading…</div></div>
+              <div class="main-schedule-item" data-schedule-event="deadline"><span class="schedule-up-next-badge" hidden>Up Next</span><div class="main-schedule-label">Voting Deadline</div><div class="main-schedule-time" id="votingDeadlineSchedule">Loading…</div></div>
+              <div class="main-schedule-item" data-schedule-event="reveal"><span class="schedule-up-next-badge" hidden>Up Next</span><div class="main-schedule-label">Picks Reveal</div><div class="main-schedule-time" id="picksRevealSchedule">Loading…</div></div>
             </div>
           </div>
         </div>
@@ -4733,6 +4761,7 @@ window.onload = () => {
   }));
   loadAppData();
   initializeVotingGate_();
+  initializeScheduleHighlights_();
   setInterval(refreshVisibleReactionSelections, 30000);
 };
 
@@ -7391,6 +7420,57 @@ function getRichEditorHtml(id) {
 function setRichEditorHtml(id, html) {
   const editor = document.getElementById(id);
   if (editor) editor.innerHTML = html || '';
+}
+
+let SCHEDULE_HIGHLIGHTS = null;
+let SCHEDULE_HIGHLIGHT_TIMER = null;
+let SCHEDULE_HIGHLIGHT_REQUEST = 0;
+
+function nextScheduleEvent_(events, now) {
+  return (events || []).filter(event => Date.parse(event.iso) > now)
+    .sort((a, b) => Date.parse(a.iso) - Date.parse(b.iso))[0] || null;
+}
+
+function tickScheduleHighlight_() {
+  const state = SCHEDULE_HIGHLIGHTS;
+  const now = state ? state.serverNow + performance.now() - state.receivedAt : 0;
+  const next = state ? nextScheduleEvent_(state.events, now) : null;
+  document.querySelectorAll('[data-schedule-event]').forEach(box => {
+    const active = !!next && box.dataset.scheduleEvent === next.key;
+    box.classList.toggle('schedule-up-next', active);
+    const badge = box.querySelector('.schedule-up-next-badge');
+    badge.hidden = !active;
+    if (active) {
+      box.setAttribute('aria-current', 'true');
+      badge.title = new Intl.DateTimeFormat('en-US', {
+        timeZone: state.timezone, weekday: 'long', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+      }).format(new Date(next.iso));
+    } else box.removeAttribute('aria-current');
+  });
+}
+
+function refreshScheduleHighlights_() {
+  const request = ++SCHEDULE_HIGHLIGHT_REQUEST;
+  google.script.run.withSuccessHandler(state => {
+    if (request !== SCHEDULE_HIGHLIGHT_REQUEST) return;
+    SCHEDULE_HIGHLIGHTS = {...state, receivedAt: performance.now()};
+    tickScheduleHighlight_();
+  }).withFailureHandler(() => {
+    // Keep the already confirmed future event queue during a temporary outage.
+  }).getScheduleHighlights();
+}
+
+function initializeScheduleHighlights_() {
+  if (SCHEDULE_HIGHLIGHT_TIMER) return;
+  refreshScheduleHighlights_();
+  SCHEDULE_HIGHLIGHT_TIMER = setInterval(tickScheduleHighlight_, 250);
+  setInterval(refreshScheduleHighlights_, 60000);
+  window.addEventListener('pageshow', refreshScheduleHighlights_);
+  window.addEventListener('focus', refreshScheduleHighlights_);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { tickScheduleHighlight_(); refreshScheduleHighlights_(); }
+  });
 }
 
 function startCountdown(targetId, iso, endedText) {
