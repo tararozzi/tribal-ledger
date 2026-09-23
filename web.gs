@@ -517,7 +517,7 @@ function getQuestionDefinitions_(config, castRows) {
     });
   }
 
-  const commentPrompt = String(config.CommentPromptTemplate || '').trim();
+  const commentPrompt = cleanQuestionPrompt_(config.CommentPromptTemplate);
   if (commentPrompt) {
     questions.push({
       key: 'comment',
@@ -543,6 +543,16 @@ function getQuestionConfigForWeek_(week, fallbackConfig) {
   return mergeQuestionConfig_(base, blankQuestionWeekConfig_());
 }
 
+function clearBlankQuestionMetadata_(config) {
+  const clean = Object.assign({}, config || {});
+  for (let i = 1; i <= 8; i++) {
+    if (cleanQuestionPrompt_(clean['Q' + i])) continue;
+    clean['Q' + i] = '';
+    ['Type', 'Points', 'Options'].forEach(suffix => { clean['Q' + i + suffix] = ''; });
+  }
+  return clean;
+}
+
 function blankQuestionWeekConfig_() {
   const config = { CommentPromptTemplate: '' };
   for (let i = 1; i <= 8; i++) {
@@ -561,7 +571,7 @@ function mergeQuestionConfig_(baseConfig, questionConfig) {
       merged[field] = questionConfig[field];
     }
   });
-  return merged;
+  return clearBlankQuestionMetadata_(merged);
 }
 
 function getSavedQuestionWeekConfig_(week) {
@@ -616,6 +626,7 @@ function ensureQuestionWeeksSheet_() {
 }
 
 function upsertQuestionWeekConfig_(week, questionConfig) {
+  questionConfig = clearBlankQuestionMetadata_(questionConfig);
   const sheet = ensureQuestionWeeksSheet_();
   const headers = getHeaders_(sheet);
   const rows = readTable_(sheet);
@@ -648,7 +659,7 @@ function getQuestionPointsForWeek_(week, fallbackConfig, scoringRow) {
   for (let i = 1; i <= 8; i++) {
     const configured = pointValueOrBlank_(config[`Q${i}Points`]);
     const scored = scoringRow ? pointValueOrBlank_(scoringRow[`Q${i}_Points`]) : '';
-    points[`q${i}`] = configured !== '' ? configured : scored;
+    points[`q${i}`] = cleanQuestionPrompt_(config[`Q${i}`]) ? (configured !== '' ? configured : scored) : '';
   }
   return points;
 }
@@ -1708,7 +1719,7 @@ function getAdminContentBlocks(passcode, questionWeek) {
     q7Options: String(questionConfig.Q7Options || ''),
     q8Type: normalizeQuestionType_(questionConfig.Q8Type),
     q8Options: String(questionConfig.Q8Options || ''),
-    commentPromptTemplate: sanitizeHtml_(String(questionConfig.CommentPromptTemplate || 'Campfire Thoughts')),
+    commentPromptTemplate: sanitizeHtml_(String(questionConfig.CommentPromptTemplate || '')),
     entryFeeAmount: normalizeEntryFeeAmount_(config.EntryFeeAmount),
     campAnnouncementsTitle: sanitizeHtml_(String(config.CampAnnouncementsTitle || 'Camp Announcements')),
     campAnnouncement1: sanitizeHtml_(String(config.CampAnnouncement1 || '')),

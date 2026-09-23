@@ -197,38 +197,38 @@ function seedAppConfigIfMissing_() {
     LimitedAdminPasscodes: '',
     AdminEmail: Session.getActiveUser().getEmail() || '',
     Q1: '',
-    Q1Points: 5,
-    Q1Type: 'cast',
+    Q1Points: '',
+    Q1Type: '',
     Q1Options: '',
     Q2: '',
-    Q2Points: 5,
-    Q2Type: 'cast',
+    Q2Points: '',
+    Q2Type: '',
     Q2Options: '',
     Q3: '',
-    Q3Points: 5,
-    Q3Type: 'cast',
+    Q3Points: '',
+    Q3Type: '',
     Q3Options: '',
     Q4: '',
-    Q4Points: 5,
-    Q4Type: 'cast',
+    Q4Points: '',
+    Q4Type: '',
     Q4Options: '',
     Q5: '',
-    Q5Points: 5,
-    Q5Type: 'cast',
+    Q5Points: '',
+    Q5Type: '',
     Q5Options: '',
     Q6: '',
-    Q6Points: 5,
-    Q6Type: 'cast',
+    Q6Points: '',
+    Q6Type: '',
     Q6Options: '',
     Q7: '',
-    Q7Points: 5,
-    Q7Type: 'cast',
+    Q7Points: '',
+    Q7Type: '',
     Q7Options: '',
     Q8: '',
-    Q8Points: 5,
-    Q8Type: 'cast',
+    Q8Points: '',
+    Q8Type: '',
     Q8Options: '',
-    CommentPromptTemplate: 'Campfire thoughts',
+    CommentPromptTemplate: '',
     CampAnnouncementsTitle: 'Camp Announcements',
     CampAnnouncement1: '',
     CampAnnouncement2: '',
@@ -260,6 +260,18 @@ function seedAppConfigIfMissing_() {
     Team3Name: '',
     Team3PhotoUrl: ''
   };
+
+  // Blank prompts never acquire metadata, even when older defaults are present.
+  for (let i = 1; i <= 8; i++) {
+    if (cleanQuestionPrompt_(existing['Q' + i])) continue;
+    ['Type', 'Points', 'Options'].forEach(suffix => {
+      const key = 'Q' + i + suffix;
+      if (existing[key] !== undefined && existing[key] !== '') {
+        setConfigValue_(configSheet, key, '');
+        existing[key] = '';
+      }
+    });
+  }
 
   Object.keys(defaults).forEach(key => {
     if (existing[key] === undefined || existing[key] === '') {
