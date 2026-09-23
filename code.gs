@@ -530,6 +530,7 @@ function autoFillMissingPicks() {
     const reason = 'Processing fee for missed submission';
     const penalties = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES));
     const charged = new Set(penalties.filter(r => Number(r.Week) === week && String(r.Reason || '').trim() === reason).map(r => nameKey51_(r.Player)));
+    const usedCommentAnswers = new Set(existing.map(row => String(row.Comment_Text || '')).filter(Boolean));
     const createdFor = [];
     players.forEach(player => {
       const key = nameKey51_(player.Name);
@@ -540,7 +541,7 @@ function autoFillMissingPicks() {
           SubmittedByAdmin:'FALSE', AutoAssigned:'TRUE', PenaltyApplied:'TRUE'};
         questions.forEach(q => {
           if (q.type === 'text') {
-            const answer = generateAutoFreeTextResponse_(q.prompt, player, week, castRows);
+            const answer = generateAutoFreeTextResponse_(q.prompt, player, week, castRows, usedCommentAnswers);
             payload[q.key + 'Text'] = answer;
             payload[q.key + 'Label'] = q.prompt;
             if (q.key === 'comment') {payload.commentLabel=q.prompt; payload.commentText=answer;}
@@ -950,30 +951,99 @@ function pickRandom_(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function generateAutoFreeTextResponse_(prompt, player, week, castRows) {
-  const text = String(prompt || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+function generateAutoFreeTextResponse_(prompt, player, week, castRows, usedAnswers) {
+  const text = cleanQuestionPrompt_(prompt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
   const p = text.toLowerCase();
   const cast = (castRows || []).map(row => String(row.Name || '').trim()).filter(Boolean);
   let answers;
-  if (/learn about you|describe yourself|first impression|personality|what.*bring to.*tribe/.test(p)) answers = [
-    'My tribe will learn that I bring campfire humor, questionable knot-tying skills, and an excellent poker face to Tribal Council.',
-    'They will learn that I am the cheerful camp cook who remembers every alliance promise. Pass the rice; I am taking notes.',
-    'My tribe will discover that I volunteer for shelter duty, cheer the loudest, and never tell a coconut where my idol is hidden.'
+  if (/learn about you|describe yourself|first impression|personality|what.*bring to.*tribe|role.*camp/.test(p)) answers = [
+    'My tribe will learn that I can turn any shelter-building shift into a personal hammock break.',
+    'They will discover that I volunteer to supervise the rice, then disappear before anyone hands me the pot.',
+    'My tribe will learn that I am excellent at looking busy whenever someone mentions collecting firewood.',
+    'They will learn that I consider lying in the shade a vital contribution to camp morale.',
+    'My tribe will discover that I can remember every reward snack but somehow forget my turn on water duty.',
+    'They will learn that my strongest survival skill is arriving just after the chores are finished.'
   ];
-  else if (/\bwho\b|which castaway|which player|which contestant/.test(p) && cast.length) answers = [
-    'My pick is ' + pickRandom_(cast) + '. That is the name on my parchment; the coconut council has spoken!'
+  else if (/\bwho\b|which castaway|which player|which contestant/.test(p) && cast.length) answers = cast.flatMap(name => [
+    name + ' gets my pick, mostly because I was hoping they would make the decision while I stayed in the hammock.',
+    'I would choose ' + name + '. My scouting report consists of whatever I overheard between camp naps.'
+  ]);
+  else if (/\bfood\b|meal|\beat\b|snack/.test(p)) answers = [
+    'Tacos, preferably delivered to my hammock while someone else cooks the tribe\'s rice.',
+    'A giant plate of tacos. I would offer to help prepare it, then mysteriously vanish until serving time.',
+    'Tacos are my choice; my role at the reward feast would be eating first and dodging dish duty.'
   ];
-  else if (/\bfood|meal|eat|snack/.test(p)) answers = ['My choice is a mountain of tacos. I would trade a very dramatic coconut speech for that reward feast.'];
-  else if (/luxury|bring.*island|take.*island|one item/.test(p)) answers = ['I would bring a sturdy hammock: part jungle throne, part alliance meeting room, and all comfort.'];
-  else if (/tribe.*name|name.*tribe/.test(p)) answers = ['I would name our tribe the Coconut Council. Our motto: crack coconuts, not alliances.'];
-  else if (/\bwould you|\bwill you|\bdo you/.test(p)) answers = ['Yes—provided my alliance has my back. I am bringing a brave face and an emergency coconut to Tribal Council.'];
-  else if (/idol|advantage|clue/.test(p)) answers = ['I would keep the advantage secret, watch where the votes are going, and play it only when my torch is in danger. Even the coconuts would not hear my plan.'];
-  else if (/alliance|trust|loyal/.test(p)) answers = ['I would build trust by helping at camp and keeping small promises, then choose one reliable ally. A solid shelter beats an alliance built out of wet palm leaves.'];
-  else if (/challenge|immunity|reward|puzzle/.test(p)) answers = ['I would take the puzzle role, listen to my tribe, and keep everyone calm. My victory dance would be terrible, but my torch would still be lit.'];
-  else if (/strategy|plan|move|blindside/.test(p)) answers = ['My plan is to listen more than I talk, keep one trusted ally close, and save the big move until it matters. Quiet feet leave fewer tracks on the beach.'];
-  else if (/why/.test(p)) answers = ['Because staying useful at camp while keeping a little mystery gives me the best chance to keep my torch lit. The coconuts can handle the dramatic speeches.'];
-  else answers = ['My tribal take on “' + text + '”: I would put teamwork first, keep my sense of humor, and make the choice that keeps the tribe strong and my torch burning.'];
-  return pickRandom_(answers);
+  else if (/luxury|bring.*island|take.*island|one item/.test(p)) answers = [
+    'A hammock, so I can commit fully to being the least mobile member of the tribe.',
+    'A pillow. If the shelter leaks, I plan to sleep through the meeting about fixing it.',
+    'A camp chair, because apparently watching other people gather firewood is my specialty.'
+  ];
+  else if (/tribe.*name|name.*tribe/.test(p)) answers = [
+    'The Nap Alliance. I would design our flag as soon as someone else fetches the materials.',
+    'The Tomorrow Tribe: my personal promise for when I will finally help with the shelter.',
+    'The Missing Firewood. It is both our tribe name and a review of my latest chore shift.'
+  ];
+  else if (/idol|advantage|clue/.test(p)) answers = [
+    'I would tuck the idol or clue beside my hammock and take a nap, then forget which palm tree I chose.',
+    'I would ask my alliance to figure out the advantage while I handle the crucial task of sitting nearby.',
+    'My idol plan would involve lots of wandering and absolutely none of the firewood I promised to bring back.'
+  ];
+  else if (/alliance|trust|loyal/.test(p)) answers = [
+    'I would promise my alliance I will pull my weight, then somehow be on a coconut break whenever they need me.',
+    'My approach to trust is to say "count on me" and immediately forget which camp chore I agreed to do.',
+    'I would join whichever alliance lets me call hammock time "keeping a low profile."'
+  ];
+  else if (/challenge|immunity|reward|puzzle/.test(p)) answers = [
+    'I would volunteer for the puzzle, lose track of the pieces, and ask whether cheering from the shade counts instead.',
+    'My challenge contribution would be a dramatic warm-up followed by an extremely enthusiastic request to sit out.',
+    'I would call myself the reward specialist: distracted during the challenge, remarkably focused when snacks arrive.'
+  ];
+  else if (/strategy|plan|move|blindside/.test(p)) answers = [
+    'My strategy is to lie low, which I have confused with lying down while everyone else runs camp.',
+    'My big move would be dodging water duty so smoothly that even I forget I was assigned it.',
+    'I would plan a brilliant blindside, get distracted by a coconut, and turn up after the alliance meeting ends.'
+  ];
+  else if (/\bwhy\b/.test(p)) answers = [
+    'Because I have mistaken conserving energy for letting the rest of the tribe do absolutely everything.',
+    'Because my camp priorities are shade, snacks, and hoping someone else remembered the important part.',
+    'Because I said "I will do it in a minute" and then treated that minute like an entire Survivor season.'
+  ];
+  else if (/\bwhen\b/.test(p)) answers = [
+    'Just after everyone else has finished the work, if my usual camp timing is any indication.',
+    'After one more hammock break, which is also what I said three hammock breaks ago.',
+    'Whenever somebody comes to find me; keeping track of camp responsibilities is apparently not my advantage.'
+  ];
+  else if (/\bwhere\b/.test(p)) answers = [
+    'In the shadiest corner of camp, conveniently out of earshot of anyone assigning chores.',
+    'Beside my hammock, where I have established headquarters for avoiding useful work.',
+    'Near the rice pot at serving time; finding me during cleanup would be a much harder challenge.'
+  ];
+  else if (/\bwould you\b|\bwill you\b|\bdo you\b|\bcould you\b/.test(p)) answers = [
+    'I would say yes at the camp meeting, then get distracted and hope someone more reliable takes over.',
+    'Only if it can be managed from my hammock; my tribe has already noticed that unfortunate limitation.',
+    'I would promise to, but my track record around camp suggests everyone should have a backup plan.'
+  ];
+  else {
+    // Keep uncommon prompts anchored to their actual subject, rather than a voting-error notice.
+    const subject = text.replace(/[?!.]+$/g, '');
+    answers = [
+      'My contribution to "' + subject + '" would be announcing that I have a plan, then leaving my tribe to finish it while I nap.',
+      'Faced with "' + subject + '", I would offer enthusiastic advice from the shade and somehow miss every chance to help.',
+      'For "' + subject + '", I would rely on my signature camp move: getting distracted until somebody else handles it.'
+    ];
+  }
+  const endings = ['', ' My torch is getting more exercise than I am.', ' The tribe has started assigning my chores to an empty coconut.', ' I call it conserving energy; my tribe calls it another missed chore.', ' Even the shelter has contributed more support than I have.', ' My imaginary job title is Assistant to the Hammock.'];
+  const candidates = endings.flatMap(ending => answers.map(answer => answer + ending));
+  const seed = nameKey51_(player && player.Name) + '|' + week + '|' + p;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (Math.imul(hash, 31) + seed.charCodeAt(i)) >>> 0;
+  const used = usedAnswers || new Set();
+  for (let offset = 0; offset < candidates.length; offset++) {
+    const answer = candidates[(hash + offset) % candidates.length];
+    if (!used.has(answer)) { used.add(answer); return answer; }
+  }
+  return candidates[hash % candidates.length];
 }
 
 function normalizeAnswer51_(value) {
