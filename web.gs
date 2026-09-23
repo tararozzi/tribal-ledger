@@ -216,6 +216,7 @@ function getVercelRpcHandlers_() {
     getAdminQuestionWeek,
     getAdminResultAnswerChoices,
     getAppData,
+    getVotingAccess,
     getAvailablePickWeeks,
     getBonusLog,
     getCaptionThisData,
@@ -779,7 +780,7 @@ function submitPicks(payload) {
     const voting = getVotingStatus_(config, timezone);
 
     if (!voting.isOpen) {
-      throw new Error('Voting is currently closed for this week.');
+      throw new Error('Voting is currently closed.');
     }
 
     payload.SubmittedByAdmin = 'FALSE';
@@ -882,6 +883,12 @@ function upsertPickRecord_(payload, options) {
   };
 
   const values = headers.map(h => record[h] !== undefined ? record[h] : '');
+
+  if (!options.allowAdminEdit) {
+    const current = readConfig_(mustGetSheet_(ss, APP_SHEETS_51.CONFIG));
+    if (!getVotingStatus_(current, String(current.Timezone || 'America/Los_Angeles')).isOpen) throw new Error('Voting is currently closed.');
+    if (Number(current.WeekNumber || 1) !== week) throw new Error('The voting round has changed. Please log in again to load the current round.');
+  }
 
   if (existingRowNumber) {
     sheet.getRange(existingRowNumber, 1, 1, headers.length).setValues([values]);
@@ -3157,4 +3164,28 @@ function cleanOptionalHtml_(html) {
     .replace(/\s+/g, ' ')
     .trim();
   return visibleText ? sanitized : '';
+}
+
+// Read-only access gate. Uses the same schedule and effective week as submitPicks.
+function getVotingAccess(name, tribalKey) {
+  const config = readConfig_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CONFIG));
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const voting = getVotingStatus_(config, timezone);
+  const serverNow = Date.now();
+  const deadlines = [Date.parse(voting.deadlineIso), Date.parse(config.VotingOverrideUntil)]
+    .filter(value => Number.isFinite(value) && value > serverNow);
+  const status = {
+    ...voting, timezone, serverNow, weekNumber: Number(config.WeekNumber || 1),
+    expiresAt: Math.min(serverNow + 60000, ...deadlines)
+  };
+  if (name !== undefined || tribalKey !== undefined) {
+    if (!voting.isOpen) throw new Error('Voting is currently closed.');
+    const player = verifyInteractionPlayer(name, tribalKey);
+    // Recheck after credential lookup in case the deadline elapsed during that lookup.
+    if (!getVotingStatus_(config, timezone).isOpen) throw new Error('Voting is currently closed.');
+    status.name = player.name;
+    const cast = readTable_(mustGetSheet_(SpreadsheetApp.getActive(), APP_SHEETS_51.CAST));
+    status.questions = getQuestionDefinitions_(getQuestionConfigForWeek_(status.weekNumber, config), cast);
+  }
+  return status;
 }
