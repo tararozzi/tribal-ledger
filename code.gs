@@ -496,66 +496,58 @@ function buildScoringMap_(rows) {
 function autoFillMissingPicks() {
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-
   try {
     const ss = SpreadsheetApp.getActive();
     const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
-    const week = Number(config.WeekNumber || 1);
-
+    const window = getMissedPicksWindow51_(config);
+    if (!window.due) return {ok:true, skipped:true, message:'Not yet due or outside the closed voting round.'};
+    const properties = PropertiesService.getScriptProperties();
+    if (properties.getProperty('MissedPicksCompleted51') === window.key) return {ok:true, skipped:true, message:'Round already processed.'};
+    const week = window.week;
     const players = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERS))
-      .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE');
-
-    const castRows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.CAST))
-      .filter(r => isActiveCastStatus51_(r.Status));
-
-    const questionConfig = typeof getQuestionConfigForWeek_ === 'function'
-      ? getQuestionConfigForWeek_(week, config)
-      : config;
-    const questionDefs = getQuestionDefinitions_(questionConfig, castRows);
-
-    const existing = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PICKS)), buildCanonicalNameMap_(players))
-      .filter(r => Number(r.Week || 0) === week);
-
-    const existingKeys = new Set(existing.map(r => nameKey51_(r.Name)));
-
+      .filter(p => String(p.Active || '').trim().toUpperCase() !== 'FALSE' && nameKey51_(p.Name));
+    const castRows = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.CAST)).filter(r => isActiveCastStatus51_(r.Status));
+    const questionConfig = getQuestionConfigForWeek_(week, config);
+    const questions = getQuestionDefinitions_(questionConfig, castRows);
+    if (!questions.length) throw new Error('No questions configured for this round; retry after questions are available.');
+    questions.filter(q => q.type !== 'text').forEach(q => {
+      if (!q.options || !q.options.some(o => String(o.value || '').trim())) throw new Error('No valid choices for ' + q.key);
+    });
+    const existing = dedupeLatestPicks_(readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PICKS)), buildCanonicalNameMap_(players)).filter(r => Number(r.Week || 0) === week);
+    const byName = new Map(existing.map(row => [nameKey51_(row.Name), row]));
+    const reason = 'Processing fee for missed submission';
+    const penalties = readTable_(mustGetSheet_(ss, GAME_SHEETS_51.PLAYERBONUSES));
+    const charged = new Set(penalties.filter(r => Number(r.Week) === week && String(r.Reason || '').trim() === reason).map(r => nameKey51_(r.Player)));
     const createdFor = [];
-
     players.forEach(player => {
       const key = nameKey51_(player.Name);
-      if (existingKeys.has(key)) return;
-
-      const payload = {
-        week,
-        name: String(player.Name || '').trim(),
-        email: String(player.Email || '').trim(),
-        commentLabel: String(questionConfig.CommentPromptTemplate || 'Campfire thoughts'),
-        commentText: generateAutoFreeTextResponse_(questionConfig.CommentPromptTemplate, player, week)
-      };
-
-      questionDefs.forEach(q => {
-        if (q.type === 'text') return;
-        payload[`${q.key}Label`] = q.prompt;
-        payload[`${q.key}Pick`] = pickRandom_(q.options.map(o => o.value));
-      });
-
-      payload.SubmittedByAdmin = 'FALSE';
-      payload.AutoAssigned = 'TRUE';
-      payload.PenaltyApplied = 'TRUE';
-
-      upsertPickRecord_(payload, { allowAdminEdit: true, markAutoAssigned: true });
-      addOrUpdateBonusRow_(week, payload.name, -1, 'Processing fee for missed submission');
-      createdFor.push(payload.name);
+      const prior = byName.get(key);
+      if (prior && String(prior.AutoAssigned).toUpperCase() !== 'TRUE') return;
+      if (!prior) {
+        const payload = {week, name:String(player.Name || '').trim(), email:String(player.Email || '').trim(),
+          SubmittedByAdmin:'FALSE', AutoAssigned:'TRUE', PenaltyApplied:'TRUE'};
+        questions.forEach(q => {
+          if (q.type === 'text') {
+            const answer = generateAutoFreeTextResponse_(q.prompt, player, week, castRows);
+            payload[q.key + 'Text'] = answer;
+            payload[q.key + 'Label'] = q.prompt;
+            if (q.key === 'comment') {payload.commentLabel=q.prompt; payload.commentText=answer;}
+          } else {
+            payload[q.key + 'Label'] = q.prompt;
+            payload[q.key + 'Pick'] = pickRandom_(q.options.map(o => o.value).filter(v => String(v || '').trim()));
+          }
+        });
+        upsertPickRecord_(payload, {allowAdminEdit:true, markAutoAssigned:true});
+        byName.set(key, {AutoAssigned:'TRUE'});
+        createdFor.push(payload.name);
+      }
+      // Repair a partial previous run (pick saved, penalty failed) without rerolling.
+      if (!charged.has(key)) {addOrUpdateBonusRow_(week, player.Name, -1, reason);charged.add(key);}
     });
-
-    return {
-      ok: true,
-      message: createdFor.length
-        ? `Auto-assigned picks for: ${createdFor.join(', ')}`
-        : 'No missing picks needed auto-assignment.'
-    };
-  } finally {
-    lock.releaseLock();
-  }
+    properties.setProperty('MissedPicksCompleted51', window.key);
+    console.log(JSON.stringify({week, dueAt:window.dueAt, assigned:createdFor.length}));
+    return {ok:true, assigned:createdFor.length, message:createdFor.length ? 'Auto-assigned missing picks.' : 'No missing picks needed auto-assignment.'};
+  } finally {lock.releaseLock();}
 }
 
 function addOrUpdateBonusRow_(week, player, points, reason) {
@@ -946,51 +938,30 @@ function pickRandom_(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function generateAutoFreeTextResponse_(prompt, player, week) {
-  const plainPrompt = String(prompt || '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-  const topicPool = [];
-
-  if (/\bidol|advantage|clue|hidden\b/.test(plainPrompt)) {
-    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.idol);
-  }
-  if (/\balliance|trust|loyal|social|vote with\b/.test(plainPrompt)) {
-    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.alliance);
-  }
-  if (/\bblindside|surprise|shocking|betray|flip\b/.test(plainPrompt)) {
-    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.blindside);
-  }
-  if (/\bstrategy|move|plan|gameplay|threat|target\b/.test(plainPrompt)) {
-    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.strategy);
-  }
-  if (/\bchallenge|immunity|reward|puzzle\b/.test(plainPrompt)) {
-    topicPool.push(...SURVIVOR_THEMED_AUTO_COMMENT_TOPICS.challenge);
-  }
-
-  const playerName = String(player && player.Name || '').trim();
-  const weekTag = week ? ` Week ${week}` : '';
-  const personalized = [
-    `${playerName || 'This castaway'} missed Tribal${weekTag} and is blaming the jungle calendar.`,
-    `${playerName || 'This castaway'} was last seen whispering "I have the numbers" to a coconut.`,
-    `${playerName || 'This castaway'} tried to play an expired parchment as an advantage.`,
-    `${playerName || 'This castaway'} was too busy searching for a hidden immunity idol to answer this question.`,
-    `${playerName || 'This castaway'} had their torch snuffed by Jeff before they could finish typing.`,
-    `${playerName || 'This castaway'} felt that camp life got too rough and missed Tribal again.`,
-    `${playerName || 'This castaway'} got lost on the way back from the reward challenge.`,
-    `${playerName || 'This castaway'} trusted their alliance to remind them… rookie mistake.`,
-    `${playerName || 'This castaway'} played their Shot in the Dark and lost track of time.`,
-    `${playerName || 'This castaway'} wandered off looking for advantages and forgot to vote.`,
-    `${playerName || 'This castaway'} accidentally formed an alliance with the wrong time zone.`,
-    `${playerName || 'This castaway'} was practicing fire-making instead of answering questions.`,
-    `${playerName || 'This castaway'} got blindsided by the deadline.`,
-    `${playerName || 'This castaway'} was rationing rice and forgot to submit their picks.`,
-    `${playerName || 'This castaway'}'s alliance told them that the deadline was tomorrow….`
+function generateAutoFreeTextResponse_(prompt, player, week, castRows) {
+  const text = String(prompt || '').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+  const p = text.toLowerCase();
+  const cast = (castRows || []).map(row => String(row.Name || '').trim()).filter(Boolean);
+  let answers;
+  if (/learn about you|describe yourself|first impression|personality|what.*bring to.*tribe/.test(p)) answers = [
+    'My tribe will learn that I bring campfire humor, questionable knot-tying skills, and an excellent poker face to Tribal Council.',
+    'They will learn that I am the cheerful camp cook who remembers every alliance promise. Pass the rice; I am taking notes.',
+    'My tribe will discover that I volunteer for shelter duty, cheer the loudest, and never tell a coconut where my idol is hidden.'
   ];
-
-  return pickRandom_([].concat(topicPool, SURVIVOR_THEMED_AUTO_COMMENTS, personalized));
+  else if (/\bwho\b|which castaway|which player|which contestant/.test(p) && cast.length) answers = [
+    'My pick is ' + pickRandom_(cast) + '. That is the name on my parchment; the coconut council has spoken!'
+  ];
+  else if (/\bfood|meal|eat|snack/.test(p)) answers = ['My choice is a mountain of tacos. I would trade a very dramatic coconut speech for that reward feast.'];
+  else if (/luxury|bring.*island|take.*island|one item/.test(p)) answers = ['I would bring a sturdy hammock: part jungle throne, part alliance meeting room, and all comfort.'];
+  else if (/tribe.*name|name.*tribe/.test(p)) answers = ['I would name our tribe the Coconut Council. Our motto: crack coconuts, not alliances.'];
+  else if (/\bwould you|\bwill you|\bdo you/.test(p)) answers = ['Yes—provided my alliance has my back. I am bringing a brave face and an emergency coconut to Tribal Council.'];
+  else if (/idol|advantage|clue/.test(p)) answers = ['I would keep the advantage secret, watch where the votes are going, and play it only when my torch is in danger. Even the coconuts would not hear my plan.'];
+  else if (/alliance|trust|loyal/.test(p)) answers = ['I would build trust by helping at camp and keeping small promises, then choose one reliable ally. A solid shelter beats an alliance built out of wet palm leaves.'];
+  else if (/challenge|immunity|reward|puzzle/.test(p)) answers = ['I would take the puzzle role, listen to my tribe, and keep everyone calm. My victory dance would be terrible, but my torch would still be lit.'];
+  else if (/strategy|plan|move|blindside/.test(p)) answers = ['My plan is to listen more than I talk, keep one trusted ally close, and save the big move until it matters. Quiet feet leave fewer tracks on the beach.'];
+  else if (/why/.test(p)) answers = ['Because staying useful at camp while keeping a little mystery gives me the best chance to keep my torch lit. The coconuts can handle the dramatic speeches.'];
+  else answers = ['My tribal take on “' + text + '”: I would put teamwork first, keep my sense of humor, and make the choice that keeps the tribe strong and my torch burning.'];
+  return pickRandom_(answers);
 }
 
 function normalizeAnswer51_(value) {
@@ -1122,3 +1093,36 @@ function sanitizeHtml51_(html) {
     .replace(/\son\w+="[^"]*"/gi, '')
     .replace(/\son\w+='[^']*'/gi, '');
 }
+
+function getMissedPicksWindow51_(config, now) {
+  now = now || new Date();
+  const timezone = String(config.Timezone || 'America/Los_Angeles');
+  const season = getSeasonClock51_(config, now);
+  if (season && (season.beforeStart || season.afterSeason)) return {due:false};
+  if (getVotingStatus_(config, timezone).isOpen) return {due:false};
+  const close = parseRule_(config.CloseDay, config.CloseTime);
+  const open = parseRule_(config.OpenDay || 'Monday', config.OpenTime || '12:00 AM');
+  const deadline = computeUpcomingOrCurrentIso_(now, timezone, close.dayNum, close.totalMinutes, false);
+  const dueAt = Date.parse(deadline) + 30 * 60000;
+  const nextOpen = Date.parse(computeNextOccurrenceIso_(new Date(deadline), timezone, open.dayNum, open.totalMinutes));
+  const deadlineSeason = getSeasonClock51_(config, new Date(deadline));
+  const week = Number(config.WeekNumber || 1);
+  return {due: now.getTime() >= dueAt && now.getTime() < nextOpen && (!deadlineSeason || deadlineSeason.week === week),
+    week, deadline, dueAt: new Date(dueAt).toISOString(), timezone, key: week + ':' + deadline};
+}
+
+// Safe as a time trigger or a repeat call: time and round checks happen under the lock.
+function runScheduledMissingPicks() {
+  return autoFillMissingPicks();
+}
+
+// Owner-only installer; running it never assigns a player's picks.
+function installMissedPicksAutomation() {
+  const active = Session.getActiveUser().getEmail();
+  if (!active || active !== Session.getEffectiveUser().getEmail()) throw new Error('Project owner required.');
+  const matches = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'runScheduledMissingPicks');
+  if (!matches.length) ScriptApp.newTrigger('runScheduledMissingPicks').timeBased().everyMinutes(1).create();
+  matches.slice(1).forEach(t => ScriptApp.deleteTrigger(t));
+  console.log('Missed-pick automation active: every minute; assignment eligible 30 minutes after configured voting close.');
+}
+
