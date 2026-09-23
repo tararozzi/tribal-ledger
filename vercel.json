@@ -4,15 +4,15 @@
   "rewrites": [
     {
       "source": "/vote",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/voting",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/picks",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ]
 }
