@@ -1004,6 +1004,7 @@ function getPlayerSubmission(name, week, tribalKey) {
 
   return {
     name: String(latest.Name || ''),
+    autoAssigned: String(latest.AutoAssigned || '').trim().toUpperCase() === 'TRUE',
     email: String(latest.Email || ''),
     weekPoints: weekScore ? Number(weekScore.WeekPoints || 0) : null,
     questions: [
@@ -2090,7 +2091,7 @@ function getEliteWeekPicks(week) {
       rank: s.rank || '',
       weekPoints: s.weekPoints ?? '',
       total: s.total ?? '',
-      autoAssigned: String(row.AutoAssigned || '').toUpperCase() === 'TRUE',
+      autoAssigned: String(row.AutoAssigned || '').trim().toUpperCase() === 'TRUE',
       picks: {
         q1: String(row.Q1_Pick || ''),
         q2: String(row.Q2_Pick || ''),
@@ -2209,6 +2210,7 @@ function getSeasonResponsesTable() {
 
       return {
         value,
+        autoAssigned: String(pickRow.AutoAssigned || '').trim().toUpperCase() === 'TRUE',
         isCorrect: !!value && correct.length && correct.includes(normalized)
       };
     });

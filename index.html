@@ -6167,7 +6167,7 @@ function loadMySubmission() {
           <div class="my-pick-content">
             <div class="my-pick-question">${escapeHtml(q.label || 'Question')}</div>
             ${q.points !== '' && q.points !== undefined ? `<div class="my-pick-points">${escapeHtml(String(q.points))} pts</div>` : ''}
-            <div class="my-pick-answer pick-pill ${q.isCorrect ? 'correct' : 'neutral'}">${escapeHtml(q.pick || 'No pick submitted')}</div>
+            <div class="my-pick-answer pick-pill ${q.isCorrect ? 'correct' : 'neutral'}">${renderAnswerText_(q.pick, data.autoAssigned, 'No pick submitted')}</div>
           </div>
         </article>
       `).join('');
@@ -6319,13 +6319,14 @@ function renderEliteWeekPicks(data) {
 
 function renderElitePickColumn_(row, col) {
   const picks = row.picks || {};
-  return `<td class="ledger-pick-cell">${renderPickCell_(picks[col.key], col.correct)}</td>`;
+  return `<td class="ledger-pick-cell">${renderPickCell_(picks[col.key], col.correct, row.autoAssigned)}</td>`;
 }
 
 function renderCampfireThoughts(data) {
   const comments = (data.rows || [])
     .map(row => ({
       name: row.name || '',
+      autoAssigned: row.autoAssigned,
       text: (row.picks && row.picks.comment) ? row.picks.comment : '',
       targetId: buildInteractionTargetId('thought', data.week, `${row.name}-${row.picks && row.picks.comment}`)
     }))
@@ -6346,7 +6347,7 @@ function renderCampfireThoughts(data) {
     card.className = 'campfire-thought-card';
     card.innerHTML = `
       <div class="campfire-thought-name">${escapeHtml(comment.name)}</div>
-      <div class="campfire-thought-text">${escapeHtml(comment.text)}</div>
+      <div class="campfire-thought-text">${renderAnswerText_(comment.text, comment.autoAssigned)}</div>
       ${renderReactionBar(comment.targetId, {}, 'thought', data.week)}
     `;
     grid.appendChild(card);
@@ -6355,8 +6356,13 @@ function renderCampfireThoughts(data) {
   return section;
 }
 
-function renderPickCell_(value, correctList) {
-  const safeValue = escapeHtml(value || '');
+function renderAnswerText_(value, autoAssigned, fallback = '') {
+  const text = escapeHtml(value || fallback);
+  return value && autoAssigned === true ? '<em style="font-style: italic">' + text + '</em>' : text;
+}
+
+function renderPickCell_(value, correctList, autoAssigned = false) {
+  const safeValue = renderAnswerText_(value, autoAssigned);
   const normalized = String(value || '').trim().toLowerCase();
   const correct = (correctList || []).map(v => String(v || '').trim().toLowerCase());
 
@@ -6461,8 +6467,8 @@ function loadSeasonResponsesTable() {
             </td>
             ${(row.cells || []).map(cell => `
               <td class="ledger-pick-cell">${cell.isCorrect
-                ? `<span class="pick-pill correct">${cell.value ? escapeHtml(cell.value) : '&mdash;'}</span>`
-                : `<span class="pick-pill neutral">${cell.value ? escapeHtml(cell.value) : '&mdash;'}</span>`
+                ? `<span class="pick-pill correct">${cell.value ? renderAnswerText_(cell.value, cell.autoAssigned) : '&mdash;'}</span>`
+                : `<span class="pick-pill neutral">${cell.value ? renderAnswerText_(cell.value, cell.autoAssigned) : '&mdash;'}</span>`
               }</td>
             `).join('')}
           </tr>
