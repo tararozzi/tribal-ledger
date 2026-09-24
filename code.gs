@@ -731,51 +731,7 @@ function verifyAdminPasscodeOrThrow_(passcode) {
 ========================= */
 
 function uploadTribePhoto(passcode, payload) {
-  verifyMasterAdminPasscodeOrThrow_(passcode);
-
-  const ss = SpreadsheetApp.getActive();
-  const config = readConfig_(mustGetSheet_(ss, GAME_SHEETS_51.CONFIG));
-  const week = Number(payload.week || config.WeekNumber || 1);
-  const name = String(payload.name || 'Admin').trim();
-  const email = String(payload.email || '').trim();
-  const caption = sanitizeHtml51_(String(payload.caption || '').trim());
-  const dataUrl = String(payload.dataUrl || '').trim();
-  const mimeType = String(payload.mimeType || '').trim();
-  const fileName = String(payload.fileName || `tribe-photo-week-${week}`).trim();
-
-  if (!name) throw new Error('Please enter an uploader name.');
-  if (!dataUrl) throw new Error('Please choose a photo.');
-  if (!mimeType || mimeType.indexOf('image/') !== 0) throw new Error('Only image uploads are allowed.');
-
-  const base64 = dataUrl.split(',')[1];
-  if (!base64) throw new Error('Invalid image data.');
-
-  const bytes = Utilities.base64Decode(base64);
-  const blob = Utilities.newBlob(bytes, mimeType, sanitizeFileName_(fileName));
-
-  const folderId = String(config.PhotoDriveFolderId || '').trim();
-  const folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
-  const file = folder.createFile(blob);
-
-  const photoSheet = mustGetSheet_(ss, GAME_SHEETS_51.PHOTOS);
-  photoSheet.appendRow([
-    new Date(),
-    week,
-    name,
-    email,
-    caption,
-    file.getUrl(),
-    file.getId(),
-    'TRUE'
-  ]);
-
-  logAdminChange51_({ action: 'Upload Photo', section: 'Recap', record: fileName, newValue: 'Photo uploaded', week, player: name });
-
-  return {
-    ok: true,
-    message: 'Admin snapshot has been added to camp.',
-    photoUrl: file.getUrl()
-  };
+  return saveRecapPhoto51_(passcode, payload);
 }
 
 /* =========================

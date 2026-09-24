@@ -4415,7 +4415,7 @@ tbody tr:hover td {
               <div class="admin-row">
                 <div>
                   <label class="admin-label" for="adminRecapWeek">Week Number</label>
-                  <input id="adminRecapWeek" class="text-input" type="number" min="1">
+                  <input id="adminRecapWeek" class="text-input" type="number" min="1" onchange="recapPhotoWeekChanged()">
                 </div>
                 <div>
                   <label class="admin-label" for="adminRecapTitle">Recap Title</label>
@@ -4439,8 +4439,12 @@ tbody tr:hover td {
               </div>
 
               <div class="recap-photo-manager">
-                <h3 class="section-title mini">Campfire Memories Photos</h3>
-                <p class="subtle">Upload photos for the same week as this recap.</p>
+                <h3 class="section-title mini">Captured Moments</h3>
+                <p class="subtle">Add up to 5 photos at a time, 3 MB each. JPEG, PNG, GIF, and WebP supported. Photos belong to the recap week above.</p>
+                <div class="form-actions" aria-label="Add photos">
+                  <button id="photoUploadChoice" class="btn btn-secondary" type="button" aria-pressed="true" onclick="setRecapPhotoMode('upload')">Upload Photos</button>
+                  <button id="photoImportChoice" class="btn btn-secondary" type="button" aria-pressed="false" onclick="setRecapPhotoMode('import')">Import from Image URL</button>
+                </div>
 
                 <div class="question-block">
                   <div class="question-title">Snapshot Caption</div>
@@ -4449,21 +4453,31 @@ tbody tr:hover td {
                 </div>
 
                 <div id="dropZone" class="drop-zone">
-                  <input id="photoInput" type="file" accept="image/*" multiple hidden>
+                  <input id="photoInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
                   <div class="drop-zone-inner">
                     <div class="drop-zone-title">Drop one or more weekly recap photos here</div>
                     <div class="drop-zone-subtitle">or click to browse</div>
                   </div>
                 </div>
 
+                <div id="photoImportPanel" class="hidden">
+                  <label class="admin-label" for="photoImportUrl">Direct image URL</label>
+                  <input id="photoImportUrl" class="text-input" type="url" inputmode="url" placeholder="https://example.com/photo.jpg" oninput="clearRecapImagePreview()">
+                  <p class="subtle">Preview downloads the image. Save adds our own copy to Captured Moments.</p>
+                  <button id="photoImportPreviewButton" class="btn btn-secondary" type="button" onclick="previewRecapImage()">Preview Image</button>
+                </div>
                 <div id="photoPreviewWrap" class="photo-preview-wrap hidden">
-                  <ul id="photoFileList" style="overflow-wrap:anywhere; padding-left:1.25rem"></ul>
+                  <div id="photoFileList" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:12px; width:100%; overflow-wrap:anywhere"></div>
                 </div>
 
                 <div class="form-actions">
-                  <button id="photoUploadButton" class="btn btn-primary" type="button" onclick="uploadPhoto()">Upload Photos to This Week</button>
+                  <button id="photoUploadButton" class="btn btn-primary" type="button" onclick="uploadPhoto()" disabled>Upload Photos to This Week</button>
                   <span id="photoUploadStatus" role="status" aria-live="polite"></span>
                 </div>
+                <h4>Photos for this recap</h4>
+                <p class="subtle">Remove hides a photo from the site. Its stored file, caption, and reactions are retained and can be restored here.</p>
+                <button class="btn btn-secondary" type="button" onclick="loadAdminRecapPhotos()">Refresh Photos</button>
+                <div id="adminRecapPhotos" aria-live="polite"></div>
               </div>
             </div>
 
@@ -4655,6 +4669,10 @@ let ADMIN_PASSCODE = '';
 let ADMIN_ACCESS_ROLE = '';
 let PHOTO_FILES = [];
 let PHOTO_UPLOAD_BUSY = false;
+let PHOTO_MODE = 'upload';
+let PHOTO_ADMIN_LIST_VERSION = 0;
+const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+const PHOTO_IMPORT_ERROR = 'This image could not be imported. Try another image URL or upload the photo directly.';
 let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
@@ -6571,6 +6589,7 @@ function loadAdminDashboard() {
       if (ADMIN_ACCESS_ROLE === 'recap') {
         const recapWeek = document.getElementById('adminRecapWeek');
         if (!recapWeek.value) recapWeek.value = data.weekNumber || 1;
+        loadAdminRecapPhotos();
         captureAdminSavedState();
         return;
       }
@@ -6611,6 +6630,7 @@ function loadAdminDashboard() {
       }
       adminLoadResultAnswerChoices(true);
       populateAdminContentBlocks(data.contentBlocks || {}, true);
+      loadAdminRecapPhotos();
     })
     .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
     .getAdminDashboard(ADMIN_PASSCODE);
@@ -7619,21 +7639,77 @@ function initDropZone() {
 
 function renderPhotoFiles() {
   document.getElementById('photoFileList').innerHTML = PHOTO_FILES.map(item =>
-    '<li>' + escapeHtml(item.file.name) + (item.error ? ' — ' + escapeHtml(item.error) : '') + '</li>'
+    `<div>${item.dataUrl ? `<img src="${escapeAttr(item.dataUrl)}" alt="${escapeAttr(item.file.name)}" style="width:100%; height:140px; object-fit:contain; border-radius:8px">` : ''}<div>${escapeHtml(item.file.name)}</div><div>${item.error ? escapeHtml(item.error) : 'Ready — Week ' + item.week}</div></div>`
   ).join('');
   document.getElementById('photoPreviewWrap').classList.toggle('hidden', !PHOTO_FILES.length);
+  document.getElementById('photoUploadButton').disabled = PHOTO_UPLOAD_BUSY || !PHOTO_FILES.some(item => item.dataUrl);
 }
 
-function loadPhotoFiles(files) {
-  if (PHOTO_UPLOAD_BUSY || !files || !files.length) return;
-  PHOTO_FILES = Array.from(files).map(file => ({file, error: ''}));
+function setRecapPhotoBusy(busy) {
+  PHOTO_UPLOAD_BUSY = busy;
+  ['photoUploadButton', 'photoInput', 'adminRecapWeek', 'photoUploadChoice', 'photoImportChoice', 'photoImportUrl', 'photoImportPreviewButton'].forEach(id => {
+    document.getElementById(id).disabled = busy;
+  });
+  document.getElementById('dropZone').setAttribute('aria-disabled', String(busy));
   renderPhotoFiles();
-  document.getElementById('photoUploadStatus').textContent = PHOTO_FILES.length + ' photo(s) selected. The caption applies to every selected photo.';
+}
+
+function setRecapPhotoMode(mode) {
+  if (PHOTO_UPLOAD_BUSY) return;
+  if (mode !== PHOTO_MODE) {
+    PHOTO_FILES = [];
+    document.getElementById('photoInput').value = '';
+    document.getElementById('photoUploadStatus').textContent = '';
+  }
+  PHOTO_MODE = mode;
+  document.getElementById('dropZone').classList.toggle('hidden', mode !== 'upload');
+  document.getElementById('photoImportPanel').classList.toggle('hidden', mode !== 'import');
+  document.getElementById('photoUploadChoice').setAttribute('aria-pressed', String(mode === 'upload'));
+  document.getElementById('photoImportChoice').setAttribute('aria-pressed', String(mode === 'import'));
+  document.getElementById('photoUploadButton').textContent = mode === 'import' ? 'Save Imported Photo to This Week' : 'Upload Photos to This Week';
+  renderPhotoFiles();
+}
+
+function recapPhotoWeekChanged() {
+  if (PHOTO_UPLOAD_BUSY) return;
+  PHOTO_FILES = [];
+  document.getElementById('photoInput').value = '';
+  document.getElementById('photoUploadStatus').textContent = 'Week changed. Select or preview photos for this recap.';
+  renderPhotoFiles();
+  loadAdminRecapPhotos();
+}
+
+function clearRecapImagePreview() {
+  if (PHOTO_UPLOAD_BUSY) return;
+  PHOTO_FILES = [];
+  renderPhotoFiles();
+  document.getElementById('photoUploadStatus').textContent = 'Preview this URL before saving.';
+}
+
+function selectedRecapPhotoWeek() {
+  const week = Number(document.getElementById('adminRecapWeek').value);
+  if (!Number.isInteger(week) || week < 1) throw new Error('Enter a valid recap week before selecting photos.');
+  return week;
+}
+
+function decodeRecapPhoto(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timer = setTimeout(() => { image.src = ''; reject(new Error('The image preview timed out. Try another image.')); }, 15000);
+    image.onload = () => {
+      clearTimeout(timer);
+      if (!image.naturalWidth || !image.naturalHeight) reject(new Error('This image cannot be displayed.'));
+      else resolve();
+    };
+    image.onerror = () => { clearTimeout(timer); reject(new Error('This image cannot be displayed. Use a valid JPEG, PNG, GIF, or WebP image.')); };
+    image.src = dataUrl;
+  });
 }
 
 function readRecapPhoto(file) {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) { reject(new Error('Please select an image file.')); return; }
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { reject(new Error('Use JPEG, PNG, GIF, or WebP.')); return; }
+    if (!file.size || file.size > PHOTO_MAX_BYTES) { reject(new Error('Each photo must be 3 MB or smaller.')); return; }
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error('Could not read this image.'));
@@ -7642,67 +7718,133 @@ function readRecapPhoto(file) {
   });
 }
 
+async function loadPhotoFiles(files) {
+  if (PHOTO_UPLOAD_BUSY || !files || !files.length) return;
+  if (files.length > 5) { showModal('Photo Limit', 'Select up to 5 photos at a time.'); document.getElementById('photoInput').value = ''; return; }
+  let week;
+  try { week = selectedRecapPhotoWeek(); } catch (err) { showModal('Missing Week', getErrorMessage(err)); return; }
+  PHOTO_FILES = Array.from(files).map(file => ({file, week, requestId: crypto.randomUUID(), error: '', dataUrl: ''}));
+  setRecapPhotoBusy(true);
+  document.getElementById('photoUploadStatus').textContent = 'Preparing previews for Week ' + week + '…';
+  try {
+    for (const item of PHOTO_FILES) {
+      try {
+        const dataUrl = await readRecapPhoto(item.file);
+        await decodeRecapPhoto(dataUrl);
+        item.dataUrl = dataUrl;
+      } catch (err) { item.error = getErrorMessage(err); }
+      renderPhotoFiles();
+    }
+  } finally { setRecapPhotoBusy(false); }
+  document.getElementById('photoUploadStatus').textContent = 'Confirm the previews for Week ' + week + ', then upload. The caption applies to every selected photo.';
+}
+
+function recapPhotoRpc(name, ...args) {
+  return new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
+}
+
+async function previewRecapImage() {
+  if (PHOTO_UPLOAD_BUSY) return;
+  if (!ADMIN_PASSCODE) { showModal('Admin Only', 'Unlock Admin before importing photos.'); return; }
+  let week;
+  try { week = selectedRecapPhotoWeek(); } catch (err) { showModal('Missing Week', getErrorMessage(err)); return; }
+  PHOTO_FILES = [];
+  const url = document.getElementById('photoImportUrl').value.trim();
+  setRecapPhotoBusy(true);
+  const status = document.getElementById('photoUploadStatus');
+  status.textContent = 'Downloading image preview for Week ' + week + '…';
+  try {
+    const result = await recapPhotoRpc('previewRecapImageUrl', ADMIN_PASSCODE, {week, url});
+    if (result.week !== week || !result.size || result.size > PHOTO_MAX_BYTES || !/^data:image\/(jpeg|png|gif|webp);base64,/.test(result.dataUrl)) throw new Error(PHOTO_IMPORT_ERROR);
+    await decodeRecapPhoto(result.dataUrl);
+    PHOTO_FILES = [{file: {name: result.fileName, type: result.mimeType, size: result.size}, week, dataUrl: result.dataUrl, requestId: crypto.randomUUID(), error: ''}];
+    status.textContent = 'Confirm this downloaded image for Week ' + week + ', then save. The original URL will not be used for display.';
+  } catch (err) {
+    const detail = getErrorMessage(err);
+    status.textContent = detail.includes(PHOTO_IMPORT_ERROR) ? detail : PHOTO_IMPORT_ERROR;
+    showModal('Image Import Failed', status.textContent);
+  } finally { setRecapPhotoBusy(false); }
+}
+
 async function uploadPhoto() {
   if (PHOTO_UPLOAD_BUSY || !APP_DATA) return;
-  if (!ADMIN_PASSCODE) {
-    showModal('Admin Only', 'Unlock the Admin Tribe Council before uploading game photos.');
-    return;
-  }
-  if (!PHOTO_FILES.length) {
-    showModal('Missing Photo', 'Please choose one or more photos first.');
-    return;
-  }
-  // Freeze the edited week and caption before reading files or making requests.
-  const week = PHOTO_FILES[0].week || Number(document.getElementById('adminRecapWeek').value);
-  if (!Number.isInteger(week) || week < 1) {
-    showModal('Missing Week', 'Enter a valid recap week before uploading photos.');
+  if (!ADMIN_PASSCODE) { showModal('Admin Only', 'Unlock Admin before adding photos.'); return; }
+  const selected = PHOTO_FILES.filter(item => item.dataUrl);
+  if (!selected.length) { showModal('Missing Photo', 'Choose photos or preview an image URL first.'); return; }
+  const week = selected[0].week;
+  if (selected.some(item => item.week !== week) || week !== Number(document.getElementById('adminRecapWeek').value)) {
+    showModal('Week Changed', 'Select or preview the photos again for the week currently being edited.');
     return;
   }
   const caption = getRichEditorHtml('photoCaption');
   const passcode = ADMIN_PASSCODE;
-  const selected = PHOTO_FILES.slice();
-  // Failed files keep their original week even if the editor changes before retry.
-  selected.forEach(item => { item.week = week; });
-  const controls = ['photoUploadButton', 'photoInput', 'adminRecapWeek'].map(id => document.getElementById(id));
-  const disabled = controls.map(el => el.disabled);
-  PHOTO_UPLOAD_BUSY = true;
-  controls.forEach(el => { el.disabled = true; });
+  selected.forEach(item => { if (item.caption === undefined) item.caption = caption; });
+  setRecapPhotoBusy(true);
   const status = document.getElementById('photoUploadStatus');
   let uploaded = 0;
   try {
     for (let i = 0; i < selected.length; i++) {
       const item = selected[i];
-      status.textContent = 'Uploading ' + (i + 1) + ' of ' + selected.length + ' to Week ' + week + '…';
+      status.textContent = 'Saving ' + (i + 1) + ' of ' + selected.length + ' to Week ' + week + '…';
       try {
-        const dataUrl = await readRecapPhoto(item.file);
-        await new Promise((resolve, reject) => {
-          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
-            .uploadTribePhoto(passcode, {
-              week, name: 'Admin', email: '', caption, dataUrl,
-              fileName: item.file.name, mimeType: item.file.type
-            });
+        await recapPhotoRpc('uploadTribePhoto', passcode, {
+          week, name: 'Admin', email: '', caption: item.caption, dataUrl: item.dataUrl,
+          fileName: item.file.name, mimeType: item.file.type, requestId: item.requestId
         });
         uploaded++;
         PHOTO_FILES = PHOTO_FILES.filter(entry => entry !== item);
-      } catch (err) {
-        item.error = getErrorMessage(err);
-      }
+      } catch (err) { item.error = getErrorMessage(err); }
       renderPhotoFiles();
     }
   } finally {
-    PHOTO_UPLOAD_BUSY = false;
-    controls.forEach((el, i) => { el.disabled = disabled[i]; });
+    setRecapPhotoBusy(false);
     document.getElementById('photoInput').value = '';
   }
-  const message = uploaded + ' of ' + selected.length + ' photo(s) uploaded to Week ' + week + '.' +
-    (PHOTO_FILES.length ? ' Remaining files are listed above; you can retry them or choose new images.' : '');
+  const message = uploaded + ' of ' + selected.length + ' photo(s) saved to Week ' + week + '.' +
+    (PHOTO_FILES.length ? ' Remaining files are listed above. Retry failed saves or choose new images.' : '');
   status.textContent = message;
-  if (!PHOTO_FILES.length) setRichEditorHtml('photoCaption', '');
-  if (uploaded) {
-    SELECTED_RECAP_WEEK = week;
-    loadAppData();
-  }
+  if (!PHOTO_FILES.length && getRichEditorHtml('photoCaption') === caption) setRichEditorHtml('photoCaption', '');
+  if (uploaded) { SELECTED_RECAP_WEEK = week; loadAppData(); loadAdminRecapPhotos(); }
   showModal('Photo Uploads', message);
+}
+
+async function loadAdminRecapPhotos() {
+  const version = ++PHOTO_ADMIN_LIST_VERSION;
+  const wrap = document.getElementById('adminRecapPhotos');
+  if (!wrap || !ADMIN_PASSCODE || !['master', 'recap'].includes(ADMIN_ACCESS_ROLE)) return;
+  let week;
+  try { week = selectedRecapPhotoWeek(); } catch (_) { wrap.textContent = 'Enter a recap week to manage its photos.'; return; }
+  wrap.textContent = 'Loading Week ' + week + ' photos…';
+  try {
+    const result = await recapPhotoRpc('getAdminRecapPhotos', ADMIN_PASSCODE, week);
+    if (version !== PHOTO_ADMIN_LIST_VERSION || Number(document.getElementById('adminRecapWeek').value) !== week) return;
+    wrap.innerHTML = '';
+    if (!result.photos.length) { wrap.textContent = 'No photos for Week ' + week + '.'; return; }
+    result.photos.forEach(photo => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:12px 0;overflow-wrap:anywhere';
+      row.innerHTML = `<img src="${escapeAttr(photo.photoUrl)}" alt="Week ${week} photo" style="width:96px;height:72px;object-fit:contain"><div style="flex:1;min-width:120px">${photo.caption || 'Photo'}${photo.removed ? '<div>Removed — file retained</div>' : ''}</div>`;
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'btn btn-secondary';
+      button.textContent = photo.removed ? 'Restore' : 'Remove';
+      button.onclick = () => {
+        if (PHOTO_UPLOAD_BUSY) return;
+        showConfirmModal(photo.removed ? 'Restore Photo' : 'Remove Photo', photo.removed
+          ? 'Restore this photo to Week ' + week + '?'
+          : 'Remove this photo from Week ' + week + '? Its file, caption, and reactions will be kept so you can restore it.', async () => {
+          if (button.disabled) return;
+          button.disabled = true;
+          try {
+            await recapPhotoRpc('adminSetRecapPhotoRemoved', ADMIN_PASSCODE, {...photo, removed: !photo.removed});
+            loadAdminRecapPhotos(); loadAppData();
+          } catch (err) { showModal('Photo Update Failed', getErrorMessage(err)); button.disabled = false; }
+        });
+      };
+      row.appendChild(button); wrap.appendChild(row);
+    });
+  } catch (err) {
+    if (version === PHOTO_ADMIN_LIST_VERSION) wrap.textContent = getErrorMessage(err);
+  }
 }
 
 function showModal(title, message) {

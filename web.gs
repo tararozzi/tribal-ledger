@@ -231,6 +231,9 @@ function getVercelRpcHandlers_() {
     toggleReaction,
     voteCaptionThis,
     uploadTribePhoto,
+    previewRecapImageUrl,
+    getAdminRecapPhotos,
+    adminSetRecapPhotoRemoved,
     verifyAdminPasscode,
     verifyInteractionPlayer
   };
