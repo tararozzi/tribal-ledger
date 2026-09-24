@@ -4449,19 +4449,20 @@ tbody tr:hover td {
                 </div>
 
                 <div id="dropZone" class="drop-zone">
-                  <input id="photoInput" type="file" accept="image/*" hidden>
+                  <input id="photoInput" type="file" accept="image/*" multiple hidden>
                   <div class="drop-zone-inner">
-                    <div class="drop-zone-title">Drop weekly recap photo here</div>
+                    <div class="drop-zone-title">Drop one or more weekly recap photos here</div>
                     <div class="drop-zone-subtitle">or click to browse</div>
                   </div>
                 </div>
 
                 <div id="photoPreviewWrap" class="photo-preview-wrap hidden">
-                  <img id="photoPreview" class="photo-preview" alt="Preview">
+                  <ul id="photoFileList" style="overflow-wrap:anywhere; padding-left:1.25rem"></ul>
                 </div>
 
                 <div class="form-actions">
-                  <button class="btn btn-primary" type="button" onclick="uploadPhoto()">Upload Photo to This Week</button>
+                  <button id="photoUploadButton" class="btn btn-primary" type="button" onclick="uploadPhoto()">Upload Photos to This Week</button>
+                  <span id="photoUploadStatus" role="status" aria-live="polite"></span>
                 </div>
               </div>
             </div>
@@ -4652,9 +4653,8 @@ tbody tr:hover td {
 let APP_DATA = null;
 let ADMIN_PASSCODE = '';
 let ADMIN_ACCESS_ROLE = '';
-let PHOTO_DATA_URL = '';
-let PHOTO_FILE_NAME = '';
-let PHOTO_MIME_TYPE = '';
+let PHOTO_FILES = [];
+let PHOTO_UPLOAD_BUSY = false;
 let SELECTED_RECAP_WEEK = null;
 let LOADING_TORCH_COUNT = 0;
 let ADMIN_CAST_BIOS = [];
@@ -7583,11 +7583,19 @@ function initDropZone() {
 
   if (!dropZone || !photoInput) return;
 
-  dropZone.addEventListener('click', () => photoInput.click());
+  dropZone.addEventListener('click', () => { if (!PHOTO_UPLOAD_BUSY) photoInput.click(); });
+  dropZone.tabIndex = 0;
+  dropZone.setAttribute('role', 'button');
+  dropZone.setAttribute('aria-label', 'Select weekly recap photos');
+  dropZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!PHOTO_UPLOAD_BUSY) photoInput.click();
+    }
+  });
 
   photoInput.addEventListener('change', e => {
-    const file = e.target.files && e.target.files[0];
-    if (file) loadPhotoFile(file);
+    loadPhotoFiles(e.target.files);
   });
 
   ['dragenter', 'dragover'].forEach(evt => {
@@ -7605,63 +7613,96 @@ function initDropZone() {
   });
 
   dropZone.addEventListener('drop', e => {
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) loadPhotoFile(file);
+    loadPhotoFiles(e.dataTransfer.files);
   });
 }
 
-function loadPhotoFile(file) {
-  if (!file.type.startsWith('image/')) {
-    showModal('Invalid File', 'Please upload an image file.');
-    return;
-  }
-
-  PHOTO_FILE_NAME = file.name;
-  PHOTO_MIME_TYPE = file.type;
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    PHOTO_DATA_URL = e.target.result || '';
-    document.getElementById('photoPreview').src = PHOTO_DATA_URL;
-    document.getElementById('photoPreviewWrap').classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
+function renderPhotoFiles() {
+  document.getElementById('photoFileList').innerHTML = PHOTO_FILES.map(item =>
+    '<li>' + escapeHtml(item.file.name) + (item.error ? ' — ' + escapeHtml(item.error) : '') + '</li>'
+  ).join('');
+  document.getElementById('photoPreviewWrap').classList.toggle('hidden', !PHOTO_FILES.length);
 }
 
-function uploadPhoto() {
-  if (!APP_DATA) return;
+function loadPhotoFiles(files) {
+  if (PHOTO_UPLOAD_BUSY || !files || !files.length) return;
+  PHOTO_FILES = Array.from(files).map(file => ({file, error: ''}));
+  renderPhotoFiles();
+  document.getElementById('photoUploadStatus').textContent = PHOTO_FILES.length + ' photo(s) selected. The caption applies to every selected photo.';
+}
+
+function readRecapPhoto(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) { reject(new Error('Please select an image file.')); return; }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read this image.'));
+    reader.onabort = () => reject(new Error('Image reading was cancelled.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPhoto() {
+  if (PHOTO_UPLOAD_BUSY || !APP_DATA) return;
   if (!ADMIN_PASSCODE) {
     showModal('Admin Only', 'Unlock the Admin Tribe Council before uploading game photos.');
     return;
   }
-  const name = 'Admin';
-  const caption = getRichEditorHtml('photoCaption');
-
-  if (!PHOTO_DATA_URL) {
-    showModal('Missing Photo', 'Please choose a photo first.');
+  if (!PHOTO_FILES.length) {
+    showModal('Missing Photo', 'Please choose one or more photos first.');
     return;
   }
-
-  google.script.run
-    .withSuccessHandler(r => {
-      showModal('Snapshot Added', r.message || 'Photo uploaded.');
-      setRichEditorHtml('photoCaption', '');
-      document.getElementById('photoPreviewWrap').classList.add('hidden');
-      PHOTO_DATA_URL = '';
-      PHOTO_FILE_NAME = '';
-      PHOTO_MIME_TYPE = '';
-      loadAppData();
-    })
-    .withFailureHandler(err => showModal('Upload Error', getErrorMessage(err)))
-    .uploadTribePhoto(ADMIN_PASSCODE, {
-      week: Number(document.getElementById('adminRecapWeek').value || APP_DATA.weekNumber),
-      name,
-      email: '',
-      caption,
-      dataUrl: PHOTO_DATA_URL,
-      fileName: PHOTO_FILE_NAME,
-      mimeType: PHOTO_MIME_TYPE
-    });
+  // Freeze the edited week and caption before reading files or making requests.
+  const week = PHOTO_FILES[0].week || Number(document.getElementById('adminRecapWeek').value);
+  if (!Number.isInteger(week) || week < 1) {
+    showModal('Missing Week', 'Enter a valid recap week before uploading photos.');
+    return;
+  }
+  const caption = getRichEditorHtml('photoCaption');
+  const passcode = ADMIN_PASSCODE;
+  const selected = PHOTO_FILES.slice();
+  // Failed files keep their original week even if the editor changes before retry.
+  selected.forEach(item => { item.week = week; });
+  const controls = ['photoUploadButton', 'photoInput', 'adminRecapWeek'].map(id => document.getElementById(id));
+  const disabled = controls.map(el => el.disabled);
+  PHOTO_UPLOAD_BUSY = true;
+  controls.forEach(el => { el.disabled = true; });
+  const status = document.getElementById('photoUploadStatus');
+  let uploaded = 0;
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      const item = selected[i];
+      status.textContent = 'Uploading ' + (i + 1) + ' of ' + selected.length + ' to Week ' + week + '…';
+      try {
+        const dataUrl = await readRecapPhoto(item.file);
+        await new Promise((resolve, reject) => {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
+            .uploadTribePhoto(passcode, {
+              week, name: 'Admin', email: '', caption, dataUrl,
+              fileName: item.file.name, mimeType: item.file.type
+            });
+        });
+        uploaded++;
+        PHOTO_FILES = PHOTO_FILES.filter(entry => entry !== item);
+      } catch (err) {
+        item.error = getErrorMessage(err);
+      }
+      renderPhotoFiles();
+    }
+  } finally {
+    PHOTO_UPLOAD_BUSY = false;
+    controls.forEach((el, i) => { el.disabled = disabled[i]; });
+    document.getElementById('photoInput').value = '';
+  }
+  const message = uploaded + ' of ' + selected.length + ' photo(s) uploaded to Week ' + week + '.' +
+    (PHOTO_FILES.length ? ' Remaining files are listed above; you can retry them or choose new images.' : '');
+  status.textContent = message;
+  if (!PHOTO_FILES.length) setRichEditorHtml('photoCaption', '');
+  if (uploaded) {
+    SELECTED_RECAP_WEEK = week;
+    loadAppData();
+  }
+  showModal('Photo Uploads', message);
 }
 
 function showModal(title, message) {
