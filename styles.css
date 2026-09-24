@@ -2061,6 +2061,7 @@ tbody tr:hover td {
 }
 
 .campfire-thoughts {
+  margin-top: clamp(30px, 4vw, 44px);
   margin-bottom: 18px;
 }
 
