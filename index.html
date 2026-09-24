@@ -1178,7 +1178,7 @@ body {
 }
 
 .info-grid {
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-grid {
@@ -3556,6 +3556,16 @@ tbody tr:hover td {
 }
 .schedule-up-next-badge[hidden] { display: none; }
 
+
+.recap-entry-title, .recap-entry-title * { font-weight: 700 !important; }
+.recap-video-manager, .recap-video-links { margin-top: 24px; }
+.recap-video-list { list-style: none; padding: 0; margin: 0; }
+.recap-video-list a { display: inline-block; min-height: 44px; padding: 10px 0; font-weight: 700; overflow-wrap: anywhere; }
+.recap-video-description { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.recap-video-row { margin: 12px 0; }
+.recap-video-row textarea { width: 100%; min-height: 72px; resize: vertical; }
+
+.recap-video-links .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 </style>
 </head>
 <body>
@@ -3689,7 +3699,7 @@ tbody tr:hover td {
 
           <div class="card">
             <h2 class="section-title" id="atAGlanceTitle">How to Play</h2>
-            <ul class="bullet-list" id="atAGlanceList"></ul>
+            <div id="atAGlanceList"></div>
           </div>
         </div>
 
@@ -4479,6 +4489,17 @@ tbody tr:hover td {
                 <button class="btn btn-secondary" type="button" onclick="loadAdminRecapPhotos()">Refresh Photos</button>
                 <div id="adminRecapPhotos" aria-live="polite"></div>
               </div>
+              <div class="recap-video-manager">
+                <h3 class="section-title mini">Video Links</h3>
+                <p class="subtle">Add videos for the recap week above. Titles and descriptions are optional. Save Video Links applies additions, edits, and removals.</p>
+                <div id="adminRecapVideoRows"></div>
+                <div class="form-actions">
+                  <button id="recapVideoAdd" class="btn btn-secondary" type="button" onclick="addRecapVideoRow()" disabled>Add Video Link</button>
+                  <button id="recapVideoSave" class="btn btn-primary" type="button" onclick="saveRecapVideoLinks()" disabled>Save Video Links</button>
+                  <button id="recapVideoReload" class="btn btn-secondary" type="button" onclick="reloadRecapVideoLinks()">Reload Saved Links</button>
+                </div>
+                <p id="recapVideoStatus" role="status" aria-live="polite"></p>
+              </div>
             </div>
 
             <!-- Caption This -->
@@ -4669,6 +4690,9 @@ let ADMIN_PASSCODE = '';
 let ADMIN_ACCESS_ROLE = '';
 let PHOTO_FILES = [];
 let PHOTO_UPLOAD_BUSY = false;
+let RECAP_VIDEO_DRAFTS = {};
+let RECAP_VIDEO_LOAD = 0;
+let RECAP_VIDEO_BUSY = false;
 let PHOTO_MODE = 'upload';
 let PHOTO_ADMIN_LIST_VERSION = 0;
 const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
@@ -4773,7 +4797,7 @@ window.onload = () => {
   enhanceRichTextToolbars();
   const adminPanel = document.getElementById('adminPanel');
   ['input', 'change'].forEach(eventName => adminPanel && adminPanel.addEventListener(eventName, event => {
-    if (!event.isTrusted) return;
+    if (!event.isTrusted || event.target.closest('.recap-video-manager')) return;
     const section = event.target.closest('.admin-scroll-target');
     ADMIN_DIRTY_SECTIONS.add(section ? section.id : 'admin');
   }));
@@ -4805,6 +4829,7 @@ function showSection(sectionId, votingChecked) {
     showConfirmModal('Unsaved Admin Changes', 'You have unsaved changes in Admin. Leave without saving them?', () => {
       ADMIN_SAVED_STATE = null;
       ADMIN_DIRTY_SECTIONS.clear();
+      RECAP_VIDEO_DRAFTS = {};
       loadAdminDashboard();
       showSection(sectionId);
     });
@@ -4864,7 +4889,7 @@ function captureAdminSectionSavedState(section) {
 }
 
 function hasUnsavedAdminChanges() {
-  return ADMIN_SAVED_STATE !== null && ADMIN_DIRTY_SECTIONS.size > 0;
+  return Object.values(RECAP_VIDEO_DRAFTS).some(draft => draft.dirty) || (ADMIN_SAVED_STATE !== null && ADMIN_DIRTY_SECTIONS.size > 0);
 }
 
 function scrollAdminSection(sectionId) {
@@ -5087,8 +5112,8 @@ function renderContentBlocks(blocks) {
         phaseMessages.reminder
       ].filter(Boolean);
   uniqueBy_(glanceItems, text => stripHtml(text).toLowerCase()).forEach(text => {
-    const li = document.createElement('li');
-    li.className = 'admin-entry-text';
+    const li = document.createElement('div');
+    li.className = 'announcement admin-entry-text';
     li.innerHTML = text === phaseMessages.reminder ? escapeHtml(text) : text;
     glance.appendChild(li);
   });
@@ -5496,7 +5521,7 @@ function renderRecap(updates) {
     const section = document.createElement('section');
     section.className = `recap-update album-week ${active ? 'active' : ''}`;
     section.innerHTML = `
-      <h3 class="section-title mini">${update.title || `Week ${update.week} Recap`}</h3>
+      <h3 class="section-title mini recap-entry-title">${update.title || `Week ${update.week} Recap`}</h3>
       <div class="recap-box admin-entry-text">${update.body || '<p>Weekly recap coming soon.</p>'}</div>
       ${renderReactionBar(update.targetId || buildInteractionTargetId('recap', update.week), update.reactions || {}, 'recap', update.week)}
       <div class="recap-photos">
@@ -5515,6 +5540,7 @@ function renderRecap(updates) {
     } else {
       grid.innerHTML = '<div class="announcement">No photos published for this week yet.</div>';
     }
+    section.insertAdjacentHTML('beforeend', renderRecapVideoLinks(update.videoLinks || []));
     wrap.appendChild(section);
   });
   refreshVisibleReactionSelections();
@@ -6590,6 +6616,7 @@ function loadAdminDashboard() {
         const recapWeek = document.getElementById('adminRecapWeek');
         if (!recapWeek.value) recapWeek.value = data.weekNumber || 1;
         loadAdminRecapPhotos();
+        loadAdminRecapVideos();
         captureAdminSavedState();
         return;
       }
@@ -6631,6 +6658,7 @@ function loadAdminDashboard() {
       adminLoadResultAnswerChoices(true);
       populateAdminContentBlocks(data.contentBlocks || {}, true);
       loadAdminRecapPhotos();
+      loadAdminRecapVideos();
     })
     .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
     .getAdminDashboard(ADMIN_PASSCODE);
@@ -7353,13 +7381,19 @@ function enhanceRichTextToolbars() {
   if (!adminPanel) return;
 
   adminPanel.querySelectorAll('.rich-editor[contenteditable="true"]').forEach(editor => {
-    let toolbar = editor.previousElementSibling;
+    let toolbar = Array.from(adminPanel.querySelectorAll('.toolbar')).find(item => item.dataset.editor === editor.id) || editor.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('toolbar')) {
       toolbar = document.createElement('div');
       toolbar.className = 'toolbar';
       toolbar.dataset.editor = editor.id;
       editor.parentNode.insertBefore(toolbar, editor);
     }
+
+    toolbar.dataset.editor = editor.id;
+    adminPanel.querySelectorAll('.toolbar').forEach(other => {
+      if (other !== toolbar && other.dataset.editor === editor.id) other.remove();
+    });
+    if (toolbar.nextElementSibling !== editor) editor.parentNode.insertBefore(toolbar, editor);
 
     if (editor.dataset.indentKeys !== 'true') {
       editor.addEventListener('keydown', event => {
@@ -7597,6 +7631,102 @@ function stopCountdown(targetId, text) {
   if (el && text !== undefined) el.textContent = text;
 }
 
+function renderRecapVideoLinks(links) {
+  const safeLinks = (links || []).filter(link => /^https?:\/\//i.test(link.url || ''));
+  if (!safeLinks.length) return '';
+  return `<div class="recap-video-links"><h3 class="section-title mini">Video Links</h3><ul class="recap-video-list">${safeLinks.map(link => `<li class="announcement"><a href="${escapeAttr(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.title || link.url)} <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>${link.description ? `<p class="recap-video-description">${escapeHtml(link.description)}</p>` : ''}</li>`).join('')}</ul></div>`;
+}
+
+function currentRecapVideoWeek() {
+  const week = Number(document.getElementById('adminRecapWeek').value);
+  return Number.isInteger(week) && week > 0 ? week : null;
+}
+
+function renderAdminRecapVideoRows() {
+  const week = currentRecapVideoWeek();
+  const draft = RECAP_VIDEO_DRAFTS[week];
+  const wrap = document.getElementById('adminRecapVideoRows');
+  wrap.innerHTML = '';
+  document.getElementById('recapVideoAdd').disabled = RECAP_VIDEO_BUSY || !draft || draft.links.length >= 20;
+  document.getElementById('recapVideoSave').disabled = RECAP_VIDEO_BUSY || !draft;
+  document.getElementById('recapVideoReload').disabled = RECAP_VIDEO_BUSY;
+  if (!draft) return;
+  draft.links.forEach((link, index) => {
+    const row = document.createElement('div');
+    row.className = 'announcement recap-video-row';
+    row.innerHTML = `<label class="admin-label" for="recapVideoUrl${index}">Video ${index + 1} URL</label><input id="recapVideoUrl${index}" class="text-input" type="url" inputmode="url" maxlength="2048" placeholder="https://www.youtube.com/watch?v=…" value="${escapeAttr(link.url)}"><label class="admin-label" for="recapVideoTitle${index}">Title (optional)</label><input id="recapVideoTitle${index}" class="text-input" maxlength="200" value="${escapeAttr(link.title)}"><label class="admin-label" for="recapVideoDescription${index}">Description (optional)</label><textarea id="recapVideoDescription${index}" class="text-input" maxlength="1000">${escapeHtml(link.description)}</textarea><div class="form-actions"><button class="btn btn-secondary" type="button">Delete Link</button></div>`;
+    ['url', 'title', 'description'].forEach((key, i) => {
+      const input = row.querySelectorAll('input, textarea')[i];
+      input.disabled = RECAP_VIDEO_BUSY;
+      input.addEventListener('input', () => { link[key] = input.value; draft.dirty = true; });
+    });
+    const remove = row.querySelector('button');
+    remove.disabled = RECAP_VIDEO_BUSY;
+    remove.onclick = () => {
+      if (RECAP_VIDEO_BUSY || currentRecapVideoWeek() !== week) return;
+      draft.links.splice(index, 1); draft.dirty = true; renderAdminRecapVideoRows();
+      document.getElementById('recapVideoStatus').textContent = 'Link removed from this draft. Save Video Links to apply.';
+    };
+    wrap.appendChild(row);
+  });
+}
+
+async function loadAdminRecapVideos() {
+  const token = ++RECAP_VIDEO_LOAD;
+  if (!ADMIN_PASSCODE) return;
+  const week = currentRecapVideoWeek();
+  const status = document.getElementById('recapVideoStatus');
+  renderAdminRecapVideoRows();
+  if (!week) { status.textContent = 'Enter a recap week to manage video links.'; return; }
+  if (RECAP_VIDEO_DRAFTS[week]) { status.textContent = 'Video links for Week ' + week + (RECAP_VIDEO_DRAFTS[week].dirty ? ' — unsaved draft.' : '.'); return; }
+  status.textContent = 'Loading video links for Week ' + week + '…';
+  try {
+    const result = await recapPhotoRpc('getAdminRecapVideos', ADMIN_PASSCODE, week);
+    if (result.week !== week) throw new Error('Video links did not match the selected week. Reload them.');
+    if (token !== RECAP_VIDEO_LOAD || currentRecapVideoWeek() !== week) return;
+    if (!RECAP_VIDEO_DRAFTS[week]) RECAP_VIDEO_DRAFTS[week] = {links: result.links, revision: result.revision, dirty: false};
+    renderAdminRecapVideoRows(); status.textContent = 'Video links for Week ' + week + '.';
+  } catch (err) { if (token === RECAP_VIDEO_LOAD) status.textContent = getErrorMessage(err); }
+}
+
+function addRecapVideoRow() {
+  const draft = RECAP_VIDEO_DRAFTS[currentRecapVideoWeek()];
+  if (RECAP_VIDEO_BUSY || !draft || draft.links.length >= 20) return;
+  draft.links.push({url: '', title: '', description: ''}); draft.dirty = true;
+  renderAdminRecapVideoRows();
+}
+
+function reloadRecapVideoLinks() {
+  if (RECAP_VIDEO_BUSY) return;
+  const week = currentRecapVideoWeek();
+  const reload = () => { delete RECAP_VIDEO_DRAFTS[week]; loadAdminRecapVideos(); };
+  if (RECAP_VIDEO_DRAFTS[week]?.dirty) showConfirmModal('Reload Video Links', 'Discard unsaved video-link edits for Week ' + week + ' and reload the saved links?', reload);
+  else reload();
+}
+
+async function saveRecapVideoLinks() {
+  if (RECAP_VIDEO_BUSY || PHOTO_UPLOAD_BUSY || !ADMIN_PASSCODE) return;
+  const week = currentRecapVideoWeek();
+  const draft = RECAP_VIDEO_DRAFTS[week];
+  if (!week || !draft) return;
+  const links = draft.links.map(link => ({url: link.url.trim(), title: link.title.trim(), description: link.description.trim()}));
+  if (links.some(link => !/^https?:\/\//i.test(link.url))) { showModal('Invalid Video URL', 'Enter a complete HTTP or HTTPS URL for every video, or delete the blank row.'); return; }
+  RECAP_VIDEO_BUSY = true;
+  const weekInput = document.getElementById('adminRecapWeek');
+  const wasDisabled = weekInput.disabled; weekInput.disabled = true;
+  renderAdminRecapVideoRows();
+  const status = document.getElementById('recapVideoStatus');
+  status.textContent = 'Saving video links for Week ' + week + '…';
+  try {
+    const result = await recapPhotoRpc('adminSaveRecapVideos', ADMIN_PASSCODE, {week, links, revision: draft.revision});
+    if (result.week !== week) throw new Error('The saved week did not match. Reload the video links.');
+    RECAP_VIDEO_DRAFTS[week] = {links: result.links, revision: result.revision, dirty: false};
+    status.textContent = 'Video links saved to Week ' + week + '.';
+    SELECTED_RECAP_WEEK = week; loadAppData();
+  } catch (err) { status.textContent = getErrorMessage(err); showModal('Video Links Not Saved', status.textContent); }
+  finally { RECAP_VIDEO_BUSY = false; weekInput.disabled = wasDisabled; renderAdminRecapVideoRows(); }
+}
+
 function initDropZone() {
   const dropZone = document.getElementById('dropZone');
   const photoInput = document.getElementById('photoInput');
@@ -7675,6 +7805,7 @@ function recapPhotoWeekChanged() {
   PHOTO_FILES = [];
   document.getElementById('photoInput').value = '';
   document.getElementById('photoUploadStatus').textContent = 'Week changed. Select or preview photos for this recap.';
+  loadAdminRecapVideos();
   renderPhotoFiles();
   loadAdminRecapPhotos();
 }

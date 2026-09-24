@@ -207,6 +207,8 @@ function getVercelRpcHandlers_() {
     adminSaveVotingSchedule,
     adminSaveInteractionSettings,
     adminSaveRecap,
+    getAdminRecapVideos,
+    adminSaveRecapVideos,
     adminSaveResults,
     adminSaveSeasonPhase,
     adminSetVotingOpen,
@@ -1999,6 +2001,7 @@ function getWeeklyUpdates_(config, timezone) {
   const ss = SpreadsheetApp.getActive();
   const recapRows = readTable_(mustGetSheet_(ss, APP_SHEETS_51.RECAPS));
   const photoAlbums = getApprovedTribePhotoAlbums_(config, timezone);
+  const videoByWeek = getRecapVideosByWeek_(config, timezone);
   const photoByWeek = {};
   photoAlbums.forEach(album => photoByWeek[Number(album.week || 0)] = album.photos || []);
   const reactionSummary = getReactionSummary_('');
@@ -2027,7 +2030,8 @@ function getWeeklyUpdates_(config, timezone) {
 
   const weeks = Array.from(new Set([
     ...Object.keys(recapsByWeek).map(Number),
-    ...Object.keys(photoByWeek).map(Number)
+    ...Object.keys(photoByWeek).map(Number),
+    ...Object.keys(videoByWeek).filter(week => videoByWeek[week].length).map(Number)
   ])).filter(Boolean).sort((a, b) => b - a);
 
   return weeks.map(week => {
@@ -2044,6 +2048,7 @@ function getWeeklyUpdates_(config, timezone) {
       body: recap.body || '<p>Weekly recap coming soon.</p>',
       reactions: reactionSummary.counts[buildInteractionTargetId_('recap', week, '')] || {},
       comments: commentsByWeek[week] || [],
+      videoLinks: videoByWeek[week] || [],
       photos: (photoByWeek[week] || []).map(photo => ({
         ...photo,
         reactions: reactionSummary.counts[photo.targetId] || {}
