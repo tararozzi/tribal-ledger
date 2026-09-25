@@ -1,0 +1,9 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
+const files=fs.existsSync('apps-script-live/Index.html')?['apps-script-live/Index.html','deployment-20260921/repo/index.html']:['index.html'];
+for(const file of files)test(file+': medal tie threshold, complete rankings, escaping and empty states',()=>{
+ const html=fs.readFileSync(file,'utf8');const wrap={classList:{add(){},remove(){}}},header={style:{}},title={};const ctx=vm.createContext({document:{getElementById:id=>({topThreeMedals:wrap,rankingsHeader:header,rankingsTitle:title})[id]},escapeHtml:s=>s.replaceAll('<','&lt;').replaceAll('>','&gt;')});vm.runInContext(html.slice(html.indexOf('function renderTopThreeMedals('),html.indexOf('function renderCaptionThis(')),ctx);
+ const rows=[...Array.from({length:4},(_,i)=>({rank:1,name:'First'+i})),...Array.from({length:3},(_,i)=>({rank:2,name:'Second'+i})),{rank:3,name:'<Third>'}];const original=JSON.stringify(rows);ctx.renderTopThreeMedals({week:1,rows},{});assert.equal((wrap.innerHTML.match(/class="place-medal/g)||[]).length,5);assert.equal((wrap.innerHTML.match(/More than three players hold this ranking\./g)||[]).length,1);assert(!wrap.innerHTML.includes('First0'));assert(wrap.innerHTML.includes('Second2'));assert(wrap.innerHTML.includes('&lt;Third&gt;'));assert.equal(JSON.stringify(rows),original);
+ for(const n of [1,2,3,4,12]){ctx.renderTopThreeMedals({week:1,rows:Array.from({length:n},(_,i)=>({rank:3,name:'Player'+i}))},{});assert.equal((wrap.innerHTML.match(/class="place-medal/g)||[]).length,n>3?1:n);assert.equal(wrap.innerHTML.includes('medal-ranking-note'),n>3);assert(wrap.innerHTML.includes('3rd'));}
+ ctx.renderTopThreeMedals({week:null,rows},{});assert(wrap.innerHTML.includes('Opening leaders'));ctx.renderTopThreeMedals({week:1,rows:[]},{});assert.equal(header.style.display,'none');
+ for(const s of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))new vm.Script(s[1]);
+});

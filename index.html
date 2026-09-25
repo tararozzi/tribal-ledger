@@ -3622,6 +3622,32 @@ tbody tr:hover td {
 }
 .photo-lightbox-close:focus-visible { outline: 3px solid #f0b84d; outline-offset: 3px; }
 
+
+/* Center one balanced text group in the medal's circular face. */
+.podium-column { flex-wrap: wrap; align-items: start; }
+.place-medal { flex: 0 0 154px; width: 154px; }
+.medal-face { box-sizing: border-box; padding: 0; }
+.medal-text {
+  position: absolute;
+  inset: 18%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  line-height: 1.15;
+  z-index: 1;
+}
+.medal-text > * { margin: 0; max-width: 100%; }
+.medal-text strong { overflow-wrap: anywhere; }
+.medal-ranking-note {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 0 8px;
+  text-align: center;
+  line-height: 1.4;
+}
 </style>
 </head>
 <body>
@@ -5262,7 +5288,7 @@ function renderTopThreeMedals(data, appData) {
   }
 
   wrap.classList.remove('awaiting-results');
-  const rows = (data.rows || []).filter(row => Number(row.rank || 0) >= 1 && Number(row.rank || 0) <= 3).slice(0, 6);
+  const rows = (data.rows || []).filter(row => Number(row.rank || 0) >= 1 && Number(row.rank || 0) <= 3);
 
   if (!rows.length) {
     wrap.innerHTML = '';
@@ -5278,8 +5304,10 @@ function renderTopThreeMedals(data, appData) {
       <div class="place-medal place-${rank}">
         <div class="medal-ribbon"></div>
         <div class="medal-face">
-          <span class="medal-rank">${label}</span>
-          <strong>${escapeHtml(row.name || '')}</strong>
+          <div class="medal-text">
+            <span class="medal-rank">${label}</span>
+            ${row.name ? `<strong>${escapeHtml(row.name)}</strong>` : ''}
+          </div>
         </div>
       </div>
     `;
@@ -5291,10 +5319,16 @@ function renderTopThreeMedals(data, appData) {
     3: rows.filter(row => Number(row.rank || 0) === 3)
   };
 
+  const renderRank = rank => {
+    const players = rankGroups[rank];
+    if (players.length <= 3) return players.map(medalMarkup).join('');
+    return medalMarkup({ rank }) + '<p class="medal-ranking-note">More than three players hold this ranking.</p>';
+  };
+
   wrap.innerHTML = `
-    <div class="podium-column podium-second">${rankGroups[2].map(medalMarkup).join('')}</div>
-    <div class="podium-column podium-first">${rankGroups[1].map(medalMarkup).join('')}</div>
-    <div class="podium-column podium-third">${rankGroups[3].map(medalMarkup).join('')}</div>
+    <div class="podium-column podium-second">${renderRank(2)}</div>
+    <div class="podium-column podium-first">${renderRank(1)}</div>
+    <div class="podium-column podium-third">${renderRank(3)}</div>
   `;
 }
 
