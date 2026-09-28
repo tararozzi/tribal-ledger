@@ -4985,7 +4985,7 @@ function scrollAdminSection(sectionId) {
 
 function applyAdminAccessRole(role) {
   ADMIN_ACCESS_ROLE = ['master', 'limited', 'recap'].includes(role) ? role : '';
-  const allowed = new Set(ADMIN_ACCESS_ROLE === 'recap' ? ['adminRecapSection'] : ['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection', 'adminCaptionThisSection']);
+  const allowed = new Set(ADMIN_ACCESS_ROLE === 'recap' ? ['adminRecapSection'] : ['adminQuestionsSection', 'adminScoringSection', 'adminBonusSection', 'adminRecapSection', 'adminCaptionThisSection', 'adminCastBioSection']);
   document.querySelectorAll('.admin-scroll-target').forEach(section => {
     section.classList.toggle('hidden', ADMIN_ACCESS_ROLE !== 'master' && !allowed.has(section.id));
   });
@@ -6768,12 +6768,13 @@ function loadAdminDashboard() {
       if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
       populateAdminCaptionThis(data.captionThis || {});
+      populateAdminCastBioList(data.castBios || []);
       if (ADMIN_ACCESS_ROLE === 'master') {
         populateAdminSeasonPhase(data);
         populateAdminVotingSchedule(data);
         renderAdminPlayerCredentials(data.playerNames || []);
         populateAdminTribeList(data.tribes || []);
-        populateAdminCastBioList(data.castBios || ((APP_DATA && APP_DATA.castGrid) || []));
+
         populateAdminInteractionControls(data.interactions || {}, data.comments || []);
       }
       adminLoadResultAnswerChoices(true);
