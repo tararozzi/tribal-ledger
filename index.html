@@ -4504,6 +4504,13 @@ tbody tr:hover td {
             <div id="adminRecapSection" class="card inner-card admin-scroll-target">
               <h3 class="section-title mini">Weekly Recap</h3>
 
+              <label class="admin-label" for="adminRecapExisting">Select a Recap to Review or Update</label>
+              <select id="adminRecapExisting" class="text-input" onchange="selectExistingRecap(this.value)">
+                <option value="">Create a new recap...</option>
+              </select>
+              <p id="adminRecapEditStatus" class="tiny-note">Select a saved week to load its title, recap text, Captured Moments, and video links together.</p>
+              <p class="subtle">Everything below belongs to the selected recap. Update Recap saves the title, recap text, and edited video links together. Photo uploads and removals apply immediately to this same week.</p>
+
               <div class="admin-row">
                 <div>
                   <label class="admin-label" for="adminRecapWeek">Week Number</label>
@@ -4527,7 +4534,9 @@ tbody tr:hover td {
               <div id="adminRecapBody" class="rich-editor" contenteditable="true"></div>
 
               <div class="form-actions">
-                <button class="btn btn-primary" type="button" onclick="adminSaveRecap()">Save Recap</button>
+                <button id="adminRecapSaveButton" class="btn btn-primary" type="button" onclick="adminSaveRecap()">Save Recap</button>
+                <button id="adminRecapCancelButton" class="btn btn-secondary hidden" type="button" onclick="cancelRecapEdit()">Cancel Edit</button>
+                <button id="adminRecapDeleteButton" class="btn btn-secondary hidden" type="button" onclick="deleteExistingRecap()">Delete Recap</button>
               </div>
 
               <div class="recap-photo-manager">
@@ -4577,10 +4586,10 @@ tbody tr:hover td {
                 <div id="adminRecapVideoRows"></div>
                 <div class="form-actions">
                   <button id="recapVideoAdd" class="btn btn-secondary" type="button" onclick="addRecapVideoRow()" disabled>Add Video Link</button>
-                  <button id="recapVideoSave" class="btn btn-primary" type="button" onclick="saveRecapVideoLinks()" disabled>Save Video Links</button>
+                  <button id="recapVideoSave" class="hidden" type="button" onclick="saveRecapVideoLinks()" disabled>Save Video Links</button>
                   <button id="recapVideoReload" class="btn btn-secondary" type="button" onclick="reloadRecapVideoLinks()">Reload Saved Links</button>
                 </div>
-                <p id="recapVideoStatus" role="status" aria-live="polite"></p>
+                <p id="recapVideoStatus" role="status" aria-live="polite">Video-link changes are saved when you select Save Recap or Update Recap.</p>
               </div>
             </div>
 
@@ -4793,6 +4802,8 @@ let PHOTO_UPLOAD_BUSY = false;
 let RECAP_VIDEO_DRAFTS = {};
 let RECAP_VIDEO_LOAD = 0;
 let RECAP_VIDEO_BUSY = false;
+let ADMIN_RECAPS = [];
+let EDITING_RECAP_ID = '';
 let PHOTO_MODE = 'upload';
 let PHOTO_ADMIN_LIST_VERSION = 0;
 const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
@@ -6755,6 +6766,7 @@ function loadAdminDashboard() {
   google.script.run
     .withSuccessHandler(data => {
       applyAdminAccessRole(data.accessRole || ADMIN_ACCESS_ROLE);
+      populateAdminRecapList(data.recaps || []);
       if (ADMIN_ACCESS_ROLE === 'recap') {
         const recapWeek = document.getElementById('adminRecapWeek');
         if (!recapWeek.value) recapWeek.value = data.weekNumber || 1;
@@ -6786,8 +6798,6 @@ function loadAdminDashboard() {
       if (bonusWeekInput && !bonusWeekInput.value) bonusWeekInput.value = data.weekNumber || 1;
       const recapWeekInput = document.getElementById('adminRecapWeek');
       if (recapWeekInput && !recapWeekInput.value) recapWeekInput.value = data.weekNumber || 1;
-      const recapTitleInput = document.getElementById('adminRecapTitle');
-      if (recapTitleInput && !recapTitleInput.value && data.latestRecapTitle) recapTitleInput.value = data.latestRecapTitle;
       populateAdminBonusPlayers((APP_DATA && APP_DATA.players) || []);
       populateAdminCaptionThis(data.captionThis || {});
       populateAdminCastBioList(data.castBios || []);
@@ -7256,18 +7266,116 @@ function adminSetVoting(isOpen) {
     .adminSetVotingOpen(ADMIN_PASSCODE, isOpen);
 }
 
-function adminSaveRecap() {
-  google.script.run
-    .withSuccessHandler(r => {
-      showModal('Recap Saved', r.message || 'Recap saved.');
-      loadAppData();
-    })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
-    .adminSaveRecap(ADMIN_PASSCODE, {
-      week: document.getElementById('adminRecapWeek').value,
+async function adminSaveRecap() {
+  const wasEditing = !!EDITING_RECAP_ID;
+  showLoadingTorch();
+  try {
+    const week = currentRecapVideoWeek();
+    if (!week) throw new Error('Enter a valid recap week.');
+    const draft = RECAP_VIDEO_DRAFTS[week];
+    if (draft && draft.dirty) {
+      const links = draft.links.map(link => ({
+        url: link.url.trim(),
+        title: link.title.trim(),
+        description: link.description.trim()
+      }));
+      if (links.some(link => !/^https?:\/\//i.test(link.url))) {
+        throw new Error('Enter a complete HTTP or HTTPS URL for every video, or delete the blank row.');
+      }
+      const savedVideos = await recapPhotoRpc('adminSaveRecapVideos', ADMIN_PASSCODE, {
+        week,
+        links,
+        revision: draft.revision
+      });
+      RECAP_VIDEO_DRAFTS[week] = { links: savedVideos.links, revision: savedVideos.revision, dirty: false };
+    }
+    const result = await recapPhotoRpc('adminSaveRecap', ADMIN_PASSCODE, {
+      recapId: EDITING_RECAP_ID,
+      week,
       title: document.getElementById('adminRecapTitle').value,
       body: getRichEditorHtml('adminRecapBody')
     });
+    EDITING_RECAP_ID = result.recapId || EDITING_RECAP_ID;
+    showModal(wasEditing ? 'Recap Updated' : 'Recap Saved', result.message || 'Recap saved.');
+    loadAppData();
+    loadAdminDashboard();
+  } catch (err) {
+    showModal('Council Error', getErrorMessage(err));
+  } finally {
+    hideLoadingTorch();
+  }
+}
+
+function populateAdminRecapList(recaps) {
+  ADMIN_RECAPS = (recaps || []).slice();
+  const select = document.getElementById('adminRecapExisting');
+  if (!select) return;
+  select.innerHTML = '<option value="">Create a new recap...</option>' + ADMIN_RECAPS.map(recap =>
+    `<option value="${escapeAttr(recap.recapId)}">Week ${escapeHtml(String(recap.week))}: ${escapeHtml(recap.title || 'Untitled Recap')}</option>`
+  ).join('');
+  if (EDITING_RECAP_ID && ADMIN_RECAPS.some(recap => recap.recapId === EDITING_RECAP_ID)) {
+    select.value = EDITING_RECAP_ID;
+  } else if (EDITING_RECAP_ID) {
+    cancelRecapEdit();
+  }
+}
+
+function selectExistingRecap(recapId) {
+  if (!recapId) {
+    cancelRecapEdit();
+    return;
+  }
+  const recap = ADMIN_RECAPS.find(item => item.recapId === recapId);
+  if (!recap) return;
+  EDITING_RECAP_ID = recap.recapId;
+  document.getElementById('adminRecapWeek').value = recap.week;
+  document.getElementById('adminRecapWeek').disabled = true;
+  document.getElementById('adminRecapTitle').value = recap.title || '';
+  setRichEditorHtml('adminRecapBody', recap.body || '');
+  document.getElementById('adminRecapSaveButton').textContent = 'Update Recap';
+  document.getElementById('adminRecapCancelButton').classList.remove('hidden');
+  document.getElementById('adminRecapDeleteButton').classList.remove('hidden');
+  document.getElementById('adminRecapEditStatus').textContent = `Editing Week ${recap.week}. Its ID and all existing activity will remain connected.`;
+  delete RECAP_VIDEO_DRAFTS[recap.week];
+  recapPhotoWeekChanged();
+}
+
+function cancelRecapEdit() {
+  EDITING_RECAP_ID = '';
+  const select = document.getElementById('adminRecapExisting');
+  if (select) select.value = '';
+  document.getElementById('adminRecapWeek').disabled = false;
+  document.getElementById('adminRecapTitle').value = '';
+  setRichEditorHtml('adminRecapBody', '');
+  document.getElementById('adminRecapSaveButton').textContent = 'Save Recap';
+  document.getElementById('adminRecapCancelButton').classList.add('hidden');
+  document.getElementById('adminRecapDeleteButton').classList.add('hidden');
+  document.getElementById('adminRecapEditStatus').textContent = 'Edit cancelled. No title, text, or video-link changes were saved.';
+}
+
+function deleteExistingRecap() {
+  const recap = ADMIN_RECAPS.find(item => item.recapId === EDITING_RECAP_ID);
+  if (!recap) return;
+  showConfirmModal(
+    'Permanently Delete Recap',
+    `Permanently delete Week ${recap.week}: ${recap.title || 'Untitled Recap'}? The recap record will be removed. Associated comments, reactions, Captured Moments, video links, and other activity may also be removed by future cleanup.`,
+    () => {
+      showLoadingTorch();
+      google.script.run
+        .withSuccessHandler(result => {
+          hideLoadingTorch();
+          cancelRecapEdit();
+          loadAppData();
+          loadAdminDashboard();
+          showModal('Recap Deleted', result.message || 'Recap deleted.');
+        })
+        .withFailureHandler(error => {
+          hideLoadingTorch();
+          showModal('Delete Failed', getErrorMessage(error));
+        })
+        .adminDeleteRecap(ADMIN_PASSCODE, recap.recapId);
+    }
+  );
 }
 
 function adminSaveContentBlocks(section) {
@@ -7832,7 +7940,7 @@ function renderAdminRecapVideoRows() {
     remove.onclick = () => {
       if (RECAP_VIDEO_BUSY || currentRecapVideoWeek() !== week) return;
       draft.links.splice(index, 1); draft.dirty = true; renderAdminRecapVideoRows();
-      document.getElementById('recapVideoStatus').textContent = 'Link removed from this draft. Save Video Links to apply.';
+      document.getElementById('recapVideoStatus').textContent = 'Link removed from this draft. Select Update Recap to apply.';
     };
     wrap.appendChild(row);
   });
@@ -7945,7 +8053,7 @@ function renderPhotoFiles() {
 function setRecapPhotoBusy(busy) {
   PHOTO_UPLOAD_BUSY = busy;
   ['photoUploadButton', 'photoInput', 'adminRecapWeek', 'photoUploadChoice', 'photoImportChoice', 'photoImportUrl', 'photoImportPreviewButton'].forEach(id => {
-    document.getElementById(id).disabled = busy;
+    document.getElementById(id).disabled = busy || (id === 'adminRecapWeek' && !!EDITING_RECAP_ID);
   });
   document.getElementById('dropZone').setAttribute('aria-disabled', String(busy));
   renderPhotoFiles();
