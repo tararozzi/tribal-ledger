@@ -4728,6 +4728,24 @@ tbody tr:hover td {
               <p class="subtle">Castaway Names are listed below. Tribal Keys remain hidden until you unlock one player and confirm the Admin password again.</p>
               <div id="adminPlayerCredentialsList" class="player-credentials-list"></div>
               <div id="adminPlayerCredentialsStatus" class="tiny-note"></div>
+              <hr>
+              <h4 class="section-title mini">Host/Observer Accounts</h4>
+              <p class="subtle">These two social-only accounts can comment and react, but are excluded from voting, scoring, penalties, leaderboards, and player statistics.</p>
+              <div class="admin-grid">
+                <div class="question-block">
+                  <h4>Host/Observer 1</h4>
+                  <label class="admin-label" for="adminHostObserver1Name">Tribal Name</label><input id="adminHostObserver1Name" class="text-input">
+                  <label class="admin-label" for="adminHostObserver1Key">Tribal Key</label><input id="adminHostObserver1Key" class="text-input" type="password" autocomplete="new-password">
+                  <div class="form-actions"><button class="btn btn-primary" type="button" onclick="saveHostObserverCredentials(1)">Save Host/Observer 1</button></div>
+                </div>
+                <div class="question-block">
+                  <h4>Host/Observer 2</h4>
+                  <label class="admin-label" for="adminHostObserver2Name">Tribal Name</label><input id="adminHostObserver2Name" class="text-input">
+                  <label class="admin-label" for="adminHostObserver2Key">Tribal Key</label><input id="adminHostObserver2Key" class="text-input" type="password" autocomplete="new-password">
+                  <div class="form-actions"><button class="btn btn-primary" type="button" onclick="saveHostObserverCredentials(2)">Save Host/Observer 2</button></div>
+                </div>
+              </div>
+              <div id="adminHostObserverStatus" class="tiny-note"></div>
             </div>
 
           </div>
@@ -6773,6 +6791,7 @@ function loadAdminDashboard() {
         populateAdminSeasonPhase(data);
         populateAdminVotingSchedule(data);
         renderAdminPlayerCredentials(data.playerNames || []);
+        populateHostObservers(data.hostObservers || []);
         populateAdminTribeList(data.tribes || []);
 
         populateAdminInteractionControls(data.interactions || {}, data.comments || []);
@@ -6841,6 +6860,28 @@ function renderAdminPlayerCredentials(playerNames) {
       </div>
       <div class="form-actions"><button class="btn btn-secondary credential-unlock" type="button" onclick="unlockPlayerCredentials(this)">Unlock to Edit</button><button class="btn btn-primary credential-save hidden" type="button" onclick="savePlayerCredentials(this)">Save Changes</button><button class="btn btn-secondary credential-cancel hidden" type="button" onclick="cancelPlayerCredentials()">Cancel</button></div>
     </article>`).join('');
+}
+
+function populateHostObservers(accounts) {
+  [1, 2].forEach(slot => {
+    const account = (accounts || []).find(item => Number(item.slot) === slot) || {};
+    const name = document.getElementById(`adminHostObserver${slot}Name`);
+    if (name) name.value = account.name || '';
+  });
+  const configured = (accounts || []).filter(account => account.configured);
+  const status = document.getElementById('adminHostObserverStatus');
+  if (status) status.textContent = configured.length ? `${configured.length} Host/Observer account${configured.length === 1 ? '' : 's'} configured. Enter a new key to reset an account.` : 'No Host/Observer accounts are configured.';
+}
+
+function saveHostObserverCredentials(slot) {
+  const name = document.getElementById(`adminHostObserver${slot}Name`).value.trim();
+  const tribalKey = document.getElementById(`adminHostObserver${slot}Key`).value.trim();
+  google.script.run.withSuccessHandler(result => {
+    document.getElementById(`adminHostObserver${slot}Key`).value = '';
+    document.getElementById('adminHostObserverStatus').textContent = result.message;
+    loadAppData(); loadAdminDashboard();
+  }).withFailureHandler(error => showModal('Host/Observer Not Saved', getErrorMessage(error)))
+    .adminSaveHostObserverCredentials(ADMIN_PASSCODE, { slot, name, tribalKey });
 }
 
 function lockAllPlayerCredentialCards_() {
