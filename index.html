@@ -5275,9 +5275,13 @@ function renderQuestions(questions) {
 
       const text = document.createElement('div');
       text.className = 'option-text';
+      const optionName = opt.label || opt.value;
+      const optionMeta = opt.team && normalizeTextKey_(opt.team) !== normalizeTextKey_(optionName)
+        ? `<div class="option-meta">${escapeHtml(opt.team)}</div>`
+        : '';
       text.innerHTML = `
-        <div class="option-name">${escapeHtml(opt.label || opt.value)}</div>
-        ${opt.team ? `<div class="option-meta">${escapeHtml(opt.team)}</div>` : ''}
+        <div class="option-name">${escapeHtml(optionName)}</div>
+        ${optionMeta}
       `;
 
       label.appendChild(input);
