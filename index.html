@@ -6363,7 +6363,7 @@ function loadMySubmission() {
         <article class="my-pick-card">
           <div class="my-pick-number">${escapeHtml(String(index + 1))}</div>
           <div class="my-pick-content">
-            <div class="my-pick-question">${escapeHtml(q.label || 'Question')}</div>
+            <div class="my-pick-question">${sanitizeRichHtml(q.label || 'Question')}</div>
             ${q.points !== '' && q.points !== undefined ? `<div class="my-pick-points">${escapeHtml(String(q.points))} pts</div>` : ''}
             <div class="my-pick-answer pick-pill ${q.isCorrect ? 'correct' : 'neutral'}">${renderAnswerText_(q.pick, data.autoAssigned, 'No pick submitted')}</div>
           </div>
@@ -6467,7 +6467,7 @@ function renderEliteWeekPicks(data) {
   const questionHeader = columns
     .map(col => `
       <th class="ledger-question-header">
-        <span class="ledger-question-text">${escapeHtml(col.label || col.key || '')}</span>
+        <span class="ledger-question-text">${sanitizeRichHtml(col.label || col.key || '')}</span>
         ${col.points !== '' && col.points !== undefined ? `<span class="ledger-points">${escapeHtml(String(col.points))} pts</span>` : ''}
       </th>
     `)
@@ -6535,7 +6535,7 @@ function renderCampfireThoughts(data) {
   const section = document.createElement('div');
   section.className = 'campfire-thoughts';
   section.innerHTML = `
-    <h3 class="section-title mini">${escapeHtml((data.headers && data.headers.comment) || 'Campfire Thoughts')}</h3>
+    <h3 class="section-title mini">${sanitizeRichHtml((data.headers && data.headers.comment) || 'Campfire Thoughts')}</h3>
     <div class="campfire-thoughts-grid"></div>
   `;
 
@@ -6629,7 +6629,7 @@ function loadSeasonResponsesTable() {
         const pts = col.points !== '' ? `<span class="ledger-points">${escapeHtml(String(col.points))} pts</span>` : '';
         return `
           <th class="ledger-question-header">
-            <span class="ledger-question-text">${escapeHtml(col.label)}</span>
+            <span class="ledger-question-text">${sanitizeRichHtml(col.label)}</span>
             ${pts}
           </th>
         `;
@@ -8301,6 +8301,32 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value);
+}
+
+function sanitizeRichHtml(value) {
+  const template = document.createElement('template');
+  template.innerHTML = String(value || '');
+  const allowedTags = new Set([
+    'DIV', 'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
+    'UL', 'OL', 'LI', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'A'
+  ]);
+
+  Array.from(template.content.querySelectorAll('*')).forEach(element => {
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(document.createTextNode(element.textContent || ''));
+      return;
+    }
+
+    const href = element.tagName === 'A' ? String(element.getAttribute('href') || '').trim() : '';
+    Array.from(element.attributes).forEach(attribute => element.removeAttribute(attribute.name));
+    if (element.tagName === 'A' && /^(https?:|mailto:)/i.test(href)) {
+      element.setAttribute('href', href);
+      element.setAttribute('target', '_blank');
+      element.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+
+  return template.innerHTML;
 }
 
 function stripHtml(value) {
