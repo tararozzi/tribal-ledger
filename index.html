@@ -3649,6 +3649,17 @@ tbody tr:hover td {
   line-height: 1.4;
 }
 </style>
+
+  <style>
+    .admin-answer-group { min-width: 0; margin: 0; padding: 10px; border: 1px solid rgba(58,41,27,.3); border-radius: 8px; }
+    .admin-answer-group legend { padding: 0 6px; }
+    .admin-answer-options { max-height: 240px; overflow-y: auto; }
+    .admin-answer-option { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; cursor: pointer; border-radius: 6px; }
+    .admin-answer-option:hover { background: rgba(58,41,27,.07); }
+    .admin-answer-option:focus-within { outline: 2px solid var(--teal, #2f716c); outline-offset: -2px; }
+    .admin-answer-option input[type="checkbox"] { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--teal, #2f716c); }
+    .admin-answer-option span { overflow-wrap: anywhere; }
+  </style>
 </head>
 <body>
   <div class="embers" aria-hidden="true">
@@ -4427,40 +4438,56 @@ tbody tr:hover td {
                 </div>
               </div>
 
-              <p class="subtle">Point values are assigned in Weekly Questions. Select all correct answers from the choices shown to players for that week. Hold Ctrl (Windows) or Command (Mac) to select multiple answers; deselect all to clear a result.</p>
+              <p class="subtle">Point values are assigned in Weekly Questions. Select all correct answers from the choices shown to players for that week. Check each correct answer. Uncheck all answers to clear a result.</p>
 
               <div class="admin-grid">
                 <div>
-                  <label class="admin-label" for="adminResultQ1">Q1 Correct Answers</label>
-                  <select id="adminResultQ1" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q1 Correct Answers</legend>
+                    <div id="adminResultQ1" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ2">Q2 Correct Answers</label>
-                  <select id="adminResultQ2" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q2 Correct Answers</legend>
+                    <div id="adminResultQ2" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ3">Q3 Correct Answers</label>
-                  <select id="adminResultQ3" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q3 Correct Answers</legend>
+                    <div id="adminResultQ3" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ4">Q4 Correct Answers</label>
-                  <select id="adminResultQ4" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q4 Correct Answers</legend>
+                    <div id="adminResultQ4" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ5">Q5 Correct Answers</label>
-                  <select id="adminResultQ5" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q5 Correct Answers</legend>
+                    <div id="adminResultQ5" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ6">Q6 Correct Answers</label>
-                  <select id="adminResultQ6" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q6 Correct Answers</legend>
+                    <div id="adminResultQ6" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ7">Q7 Correct Answers</label>
-                  <select id="adminResultQ7" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q7 Correct Answers</legend>
+                    <div id="adminResultQ7" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ8">Q8 Correct Answers</label>
-                  <select id="adminResultQ8" class="text-input" multiple size="4"></select>
+                  <fieldset class="admin-answer-group">
+                    <legend class="admin-label">Q8 Correct Answers</legend>
+                    <div id="adminResultQ8" class="admin-answer-options"></div>
+                  </fieldset>
                 </div>
               </div>
               <div id="adminResultsChoicesStatus" class="tiny-note"></div>
@@ -7143,38 +7170,44 @@ function adminLoadResultAnswerChoices(captureSavedState) {
 function populateAdminResultAnswerChoices(questions, week) {
   const status = document.getElementById('adminResultsChoicesStatus');
   for (let i = 1; i <= 8; i++) {
-    const select = document.getElementById(`adminResultQ${i}`);
-    if (!select) continue;
+    const group = document.getElementById(`adminResultQ${i}`);
+    if (!group) continue;
     const question = (questions || []).find(q => q.key === `q${i}`);
-    const options = uniqueBy_((question && question.options) || [], option => option.value.toLowerCase());
-
-    select.innerHTML = '';
-    options.forEach(option => {
-      const opt = document.createElement('option');
-      opt.value = option.value;
-      opt.textContent = option.label || option.value;
-      select.appendChild(opt);
-    });
+    const options = uniqueBy_((question && question.options) || [], option => option.value.toLowerCase()).slice();
     const savedAnswers = String((question && question.correct) || '').split('|').map(value => value.trim()).filter(Boolean);
     const savedKeys = new Set(savedAnswers.map(value => value.toLowerCase()));
     savedAnswers.forEach(value => {
-      if (!Array.from(select.options).some(option => option.value.toLowerCase() === value.toLowerCase())) {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = value;
-        select.appendChild(opt);
+      if (!options.some(option => option.value.toLowerCase() === value.toLowerCase())) {
+        options.push({value, label: value});
       }
     });
-    Array.from(select.options).forEach(option => {
-      option.selected = savedKeys.has(option.value.toLowerCase());
+    group.innerHTML = '';
+    if (!options.length) {
+      const note = document.createElement('p');
+      note.className = 'tiny-note';
+      note.textContent = 'No answer choices for this question.';
+      group.appendChild(note);
+    }
+    options.forEach((option, index) => {
+      const label = document.createElement('label');
+      label.className = 'admin-answer-option';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `adminResultQ${i}Option${index}`;
+      checkbox.name = `adminResultQ${i}`;
+      checkbox.value = option.value;
+      checkbox.checked = savedKeys.has(option.value.toLowerCase());
+      const text = document.createElement('span');
+      text.textContent = option.label || option.value;
+      label.appendChild(checkbox);
+      label.appendChild(text);
+      group.appendChild(label);
     });
-    select.disabled = !select.options.length;
   }
-
   const count = (questions || []).reduce((sum, question) => sum + ((question.options || []).length ? 1 : 0), 0);
   if (status) {
     status.textContent = count
-      ? `Loaded answer choices for Week ${week || ''}.`
+      ? `Loaded answer choices for Week ${week || ''}. Check every correct answer.`
       : `No answer choices found for Week ${week || ''}. Check that this week's questions have selectable answers.`;
   }
 }
@@ -7477,7 +7510,7 @@ function adminSaveContentBlocks(section) {
 }
 
 function getAdminSelectedAnswers_(id) {
-  return Array.from(document.getElementById(id).selectedOptions).map(option => option.value).filter(Boolean);
+  return Array.from(document.getElementById(id).querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox.value);
 }
 
 function adminSaveResults() {

@@ -23,26 +23,41 @@ test('admin saves arrays in the legacy format and can clear results',()=>{
  assert.deepEqual(Array.from(c.normalizeCorrectList_(saved[1])),['Alice','Bob']);
 });
 function frontend(){
- const selects=Object.fromEntries(Array.from({length:8},(_,i)=>['adminResultQ'+(i+1),{
- options:[],disabled:false,set innerHTML(value){this.options=[];},appendChild(option){this.options.push(option);},get selectedOptions(){return this.options.filter(option=>option.selected);}
- }]));const status={};
- const c=vm.createContext({document:{getElementById:id=>selects[id]||status,createElement:()=>({selected:false})},uniqueBy_:(items,key)=>items.filter((item,i)=>items.findIndex(other=>key(item)===key(other))===i)});
+ function element(tag){return {tagName:tag.toUpperCase(),children:[],checked:false,appendChild(child){this.children.push(child);},set innerHTML(value){this.children=[];},querySelectorAll(selector){const inputs=[];function visit(node){if(node.tagName==='INPUT'&&node.type==='checkbox'&&(!selector.includes(':checked')||node.checked))inputs.push(node);node.children.forEach(visit);}visit(this);return inputs;}};}
+ const groups=Object.fromEntries(Array.from({length:8},(_,i)=>['adminResultQ'+(i+1),element('div')]));const status={};
+ const c=vm.createContext({document:{getElementById:id=>groups[id]||status,createElement:element},uniqueBy_:(items,key)=>items.filter((item,i)=>items.findIndex(other=>key(item)===key(other))===i)});
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
  for(const name of ['populateAdminResultAnswerChoices','getAdminSelectedAnswers_']){
-  const start=html.indexOf('function '+name+'('),end=html.indexOf('\nfunction ',start+1);
+  const start=html.indexOf('function '+name+'('),end=html.indexOf('\n}',start)+2;
   vm.runInContext(html.slice(start,end),c);
  }
- return {c,selects,html};
+ return {c,groups,html};
 }
-test('admin loads all saved answers, preserves retired choices, and resets on week change',()=>{
- const {c,selects,html}=frontend();
- c.populateAdminResultAnswerChoices([{key:'q1',correct:'alice|Retired',options:[{value:'Alice'},{value:'Bob'}]}],1);
+test('checkboxes restore all saved answers, toggle independently, clear and reset on week change',()=>{
+ const {c,groups,html}=frontend();const options=[{value:'Alice',label:'Alice Castaway'},{value:'Bob'}];
+ c.populateAdminResultAnswerChoices([{key:'q1',correct:'alice|Retired',options}],1);
  assert.deepEqual(Array.from(c.getAdminSelectedAnswers_('adminResultQ1')),['Alice','Retired']);
- selects.adminResultQ1.options[1].selected=true;
+ assert.equal(options.length,2);
+ const boxes=groups.adminResultQ1.querySelectorAll('input[type="checkbox"]');
+ assert.equal(groups.adminResultQ1.children[0].children[1].textContent,'Alice Castaway');
+ boxes[1].checked=true;
  assert.deepEqual(Array.from(c.getAdminSelectedAnswers_('adminResultQ1')),['Alice','Bob','Retired']);
- selects.adminResultQ1.options.forEach(option=>option.selected=false);
+ boxes[0].checked=false;
+ assert.deepEqual(Array.from(c.getAdminSelectedAnswers_('adminResultQ1')),['Bob','Retired']);
+ boxes.forEach(box=>box.checked=false);
  assert.equal(c.getAdminSelectedAnswers_('adminResultQ1').length,0);
  c.populateAdminResultAnswerChoices([{key:'q1',correct:'Bob',options:[{value:'Alice'},{value:'Bob'}]}],2);
  assert.deepEqual(Array.from(c.getAdminSelectedAnswers_('adminResultQ1')),['Bob']);
- for(let i=1;i<=8;i++)assert.ok(html.includes('id="adminResultQ'+i+'" class="text-input" multiple'));
+ for(let i=1;i<=8;i++)assert.ok(html.includes('id="adminResultQ'+i+'" class="admin-answer-options"'));
+ assert.ok(!html.includes('Hold Ctrl'));
+ assert.equal(c.getAdminSelectedAnswers_('adminResultQ8').length,0);
+ assert.equal(groups.adminResultQ8.children[0].textContent,'No answer choices for this question.');
+});
+test('answer labels remain literal and repeated loads produce unique checkbox IDs',()=>{
+ const {c,groups}=frontend();const questions=[{key:'q1',correct:'<script>bad</script>',options:[{value:'<script>bad</script>'},{value:'BOB'},{value:'bob'}]}];
+ c.populateAdminResultAnswerChoices(questions,1);c.populateAdminResultAnswerChoices(questions,1);
+ const boxes=groups.adminResultQ1.querySelectorAll('input[type="checkbox"]');
+ assert.equal(boxes.length,2);assert.equal(new Set(boxes.map(box=>box.id)).size,2);
+ assert.equal(groups.adminResultQ1.children[0].children[1].textContent,'<script>bad</script>');
+ assert.deepEqual(Array.from(c.getAdminSelectedAnswers_('adminResultQ1')),['<script>bad</script>']);
 });
