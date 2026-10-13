@@ -4427,40 +4427,40 @@ tbody tr:hover td {
                 </div>
               </div>
 
-              <p class="subtle">Point values are assigned in Weekly Questions. Correct answers use the choices shown to players for that week.</p>
+              <p class="subtle">Point values are assigned in Weekly Questions. Select all correct answers from the choices shown to players for that week. Hold Ctrl (Windows) or Command (Mac) to select multiple answers; deselect all to clear a result.</p>
 
               <div class="admin-grid">
                 <div>
-                  <label class="admin-label" for="adminResultQ1">Q1 Correct Answer</label>
-                  <select id="adminResultQ1" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ1">Q1 Correct Answers</label>
+                  <select id="adminResultQ1" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ2">Q2 Correct Answer</label>
-                  <select id="adminResultQ2" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ2">Q2 Correct Answers</label>
+                  <select id="adminResultQ2" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ3">Q3 Correct Answer</label>
-                  <select id="adminResultQ3" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ3">Q3 Correct Answers</label>
+                  <select id="adminResultQ3" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ4">Q4 Correct Answer</label>
-                  <select id="adminResultQ4" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ4">Q4 Correct Answers</label>
+                  <select id="adminResultQ4" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ5">Q5 Correct Answer</label>
-                  <select id="adminResultQ5" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ5">Q5 Correct Answers</label>
+                  <select id="adminResultQ5" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ6">Q6 Correct Answer</label>
-                  <select id="adminResultQ6" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ6">Q6 Correct Answers</label>
+                  <select id="adminResultQ6" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ7">Q7 Correct Answer</label>
-                  <select id="adminResultQ7" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ7">Q7 Correct Answers</label>
+                  <select id="adminResultQ7" class="text-input" multiple size="4"></select>
                 </div>
                 <div>
-                  <label class="admin-label" for="adminResultQ8">Q8 Correct Answer</label>
-                  <select id="adminResultQ8" class="text-input"></select>
+                  <label class="admin-label" for="adminResultQ8">Q8 Correct Answers</label>
+                  <select id="adminResultQ8" class="text-input" multiple size="4"></select>
                 </div>
               </div>
               <div id="adminResultsChoicesStatus" class="tiny-note"></div>
@@ -4968,13 +4968,21 @@ function showSection(sectionId, votingChecked) {
 function getAdminFormState() {
   const panel = document.getElementById('adminPanel');
   if (!panel || panel.classList.contains('hidden')) return null;
+
   const controls = Array.from(panel.querySelectorAll('input, select, textarea, [contenteditable="true"]'));
   return JSON.stringify(controls.filter(control => !control.disabled && !control.readOnly).map((control, index) => {
     let value;
-    if (control.matches('[contenteditable="true"]')) value = control.innerHTML;
-    else if (control.type === 'checkbox' || control.type === 'radio') value = control.checked;
-    else if (control.type === 'file') value = Array.from(control.files || []).map(file => [file.name, file.size, file.lastModified]);
-    else value = control.value;
+    if (control.matches('[contenteditable="true"]')) {
+      value = control.innerHTML;
+    } else if (control.type === 'checkbox' || control.type === 'radio') {
+      value = control.checked;
+    } else if (control.multiple && control.tagName === 'SELECT') {
+      value = Array.from(control.selectedOptions).map(option => option.value);
+    } else if (control.type === 'file') {
+      value = Array.from(control.files || []).map(file => [file.name, file.size, file.lastModified]);
+    } else {
+      value = control.value;
+    }
     return [control.id || control.name || `${control.tagName}:${index}`, value];
   }));
 }
@@ -7137,30 +7145,30 @@ function populateAdminResultAnswerChoices(questions, week) {
   for (let i = 1; i <= 8; i++) {
     const select = document.getElementById(`adminResultQ${i}`);
     if (!select) continue;
-    const current = select.value;
     const question = (questions || []).find(q => q.key === `q${i}`);
     const options = uniqueBy_((question && question.options) || [], option => option.value.toLowerCase());
 
-    select.innerHTML = '<option value="">No correct answer yet...</option>';
+    select.innerHTML = '';
     options.forEach(option => {
       const opt = document.createElement('option');
       opt.value = option.value;
       opt.textContent = option.label || option.value;
       select.appendChild(opt);
     });
-    select.disabled = !options.length;
-    const savedCorrect = String((question && question.correct) || '').trim();
-    const selectedValue = current || savedCorrect;
-    if (selectedValue && options.some(option => option.value === selectedValue)) {
-      select.value = selectedValue;
-    } else if (savedCorrect) {
-      const opt = document.createElement('option');
-      opt.value = savedCorrect;
-      opt.textContent = savedCorrect;
-      select.appendChild(opt);
-      select.value = savedCorrect;
-      select.disabled = false;
-    }
+    const savedAnswers = String((question && question.correct) || '').split('|').map(value => value.trim()).filter(Boolean);
+    const savedKeys = new Set(savedAnswers.map(value => value.toLowerCase()));
+    savedAnswers.forEach(value => {
+      if (!Array.from(select.options).some(option => option.value.toLowerCase() === value.toLowerCase())) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        select.appendChild(opt);
+      }
+    });
+    Array.from(select.options).forEach(option => {
+      option.selected = savedKeys.has(option.value.toLowerCase());
+    });
+    select.disabled = !select.options.length;
   }
 
   const count = (questions || []).reduce((sum, question) => sum + ((question.options || []).length ? 1 : 0), 0);
@@ -7468,23 +7476,32 @@ function adminSaveContentBlocks(section) {
     });
 }
 
+function getAdminSelectedAnswers_(id) {
+  return Array.from(document.getElementById(id).selectedOptions).map(option => option.value).filter(Boolean);
+}
+
 function adminSaveResults() {
+  showLoadingTorch();
   google.script.run
     .withSuccessHandler(r => {
+      hideLoadingTorch();
       showModal('Results Saved', r.message || 'Results saved.');
       loadAppData();
     })
-    .withFailureHandler(err => showModal('Council Error', getErrorMessage(err)))
+    .withFailureHandler(err => {
+      hideLoadingTorch();
+      showModal('Council Error', getErrorMessage(err));
+    })
     .adminSaveResults(ADMIN_PASSCODE, {
       week: document.getElementById('adminResultsWeek').value,
-      q1: document.getElementById('adminResultQ1').value,
-      q2: document.getElementById('adminResultQ2').value,
-      q3: document.getElementById('adminResultQ3').value,
-      q4: document.getElementById('adminResultQ4').value,
-      q5: document.getElementById('adminResultQ5').value,
-      q6: document.getElementById('adminResultQ6').value,
-      q7: document.getElementById('adminResultQ7').value,
-      q8: document.getElementById('adminResultQ8').value
+      q1: getAdminSelectedAnswers_('adminResultQ1'),
+      q2: getAdminSelectedAnswers_('adminResultQ2'),
+      q3: getAdminSelectedAnswers_('adminResultQ3'),
+      q4: getAdminSelectedAnswers_('adminResultQ4'),
+      q5: getAdminSelectedAnswers_('adminResultQ5'),
+      q6: getAdminSelectedAnswers_('adminResultQ6'),
+      q7: getAdminSelectedAnswers_('adminResultQ7'),
+      q8: getAdminSelectedAnswers_('adminResultQ8')
     });
 }
 

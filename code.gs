@@ -429,10 +429,21 @@ function scoreAnswer51_(pickValue, correctValue, pointValue) {
   return matchesCorrect51_(pickValue, correctValue) ? toNumberOrDefault_(pointValue, 0) : 0;
 }
 
+function serializeCorrectAnswers51_(value) {
+  const answers = (Array.isArray(value) ? value : [value]).flatMap(answer => String(answer ?? '').split('|'));
+  const seen = new Set();
+  return answers.map(answer => answer.trim()).filter(answer => {
+    const key = normalizeAnswer51_(answer);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).join('|');
+}
+
 function matchesCorrect51_(pickValue, correctValue) {
   const pick = normalizeAnswer51_(pickValue);
   if (!pick) return false;
-  const candidates = String(correctValue || '')
+  const candidates = serializeCorrectAnswers51_(correctValue)
     .split('|')
     .map(normalizeAnswer51_)
     .filter(Boolean);
@@ -625,25 +636,25 @@ function adminSaveResults(passcode, payload) {
 
   const record = {
     Week: week,
-    Q1_Correct: String(payload.q1 || '').trim(),
+    Q1_Correct: serializeCorrectAnswers51_(payload.q1),
     Q1_Points: questionPoints.Q1_Points,
-    Q2_Correct: String(payload.q2 || '').trim(),
+    Q2_Correct: serializeCorrectAnswers51_(payload.q2),
     Q2_Points: questionPoints.Q2_Points,
-    Q3_Correct: String(payload.q3 || '').trim(),
+    Q3_Correct: serializeCorrectAnswers51_(payload.q3),
     Q3_Points: questionPoints.Q3_Points,
-    Q4_Correct: String(payload.q4 || '').trim(),
+    Q4_Correct: serializeCorrectAnswers51_(payload.q4),
     Q4_Points: questionPoints.Q4_Points,
-    Q5_Correct: String(payload.q5 || '').trim(),
+    Q5_Correct: serializeCorrectAnswers51_(payload.q5),
     Q5_Points: questionPoints.Q5_Points,
-    Q6_Correct: String(payload.q6 || '').trim(),
+    Q6_Correct: serializeCorrectAnswers51_(payload.q6),
     Q6_Points: questionPoints.Q6_Points,
-    Q7_Correct: String(payload.q7 || '').trim(),
+    Q7_Correct: serializeCorrectAnswers51_(payload.q7),
     Q7_Points: questionPoints.Q7_Points,
-    Q8_Correct: String(payload.q8 || '').trim(),
+    Q8_Correct: serializeCorrectAnswers51_(payload.q8),
     Q8_Points: questionPoints.Q8_Points,
-    Q1_CorrectPlus: String(payload.q1CorrectPlus || '').trim(),
+    Q1_CorrectPlus: serializeCorrectAnswers51_(payload.q1CorrectPlus),
     Q1_CorrectPlus_Points: toNumberOrDefault_(payload.q1CorrectPlusPoints, 4),
-    Q1_CorrectMinus: String(payload.q1CorrectMinus || '').trim(),
+    Q1_CorrectMinus: serializeCorrectAnswers51_(payload.q1CorrectMinus),
     Q1_CorrectMinus_Points: toNumberOrDefault_(payload.q1CorrectMinusPoints, -3)
   };
 
@@ -662,6 +673,9 @@ function adminSaveResults(passcode, payload) {
     sheet.appendRow(values);
   }
 
+  logAdminChange51_({ action: 'Save Results', section: 'Scoring', record: `Week ${week} correct answers`, previousValue: rowNumber ? rows[rowNumber - 2] : '', newValue: record, week });
+
+  syncQuestionWeeksToHistory51_([week]);
   return { ok: true, message: `Results saved for Week ${week}.` };
 }
 
