@@ -5090,10 +5090,12 @@ function loadingMarkup(message) {
 }
 
 function loadAppData() {
+  const contentRevision = CONTENT_REFRESH_REVISION51;
   showLoadingTorch();
   google.script.run
     .withSuccessHandler(data => {
       hideLoadingTorch();
+      if (contentRevision !== CONTENT_REFRESH_REVISION51) return;
       APP_DATA = data;
       renderApp(data);
       loadSeasonResponsesTable();
@@ -7232,13 +7234,15 @@ function populateAdminContentBlocks(blocks, includeCampContent) {
   populateAdminQuestionFields(blocks || {});
   if (includeCampContent) populateAdminCampContentFields(blocks || {});
   updateAdminQuestionWeekStatus(blocks || {});
+  rememberAdminContent51_(blocks || {}, 'questions');
+  if (includeCampContent) rememberAdminContent51_(blocks || {}, 'camp');
 }
 
 function populateAdminQuestionFields(blocks) {
   for (let i = 1; i <= 8; i++) {
     setRichEditorHtml(`adminQ${i}`, blocks[`q${i}`] || '');
     const pointValue = blocks[`q${i}Points`];
-    document.getElementById(`adminQ${i}Points`).value = Number(pointValue) === 0 ? '' : (pointValue ?? '');
+    document.getElementById(`adminQ${i}Points`).value = pointValue ?? '';
     document.getElementById(`adminQ${i}Type`).value = blocks[`q${i}Type`] || '';
     document.getElementById(`adminQ${i}Options`).value = blocks[`q${i}Options`] || '';
   }
@@ -7419,95 +7423,108 @@ function deleteExistingRecap() {
   );
 }
 
+const ADMIN_CONTENT_STATE51 = {};
+const ADMIN_CONTENT_PENDING51 = new Set();
+let CONTENT_REFRESH_REVISION51 = 0;
+
+function adminContentControls51_(section) {
+  const controls = [];
+  if (section === 'questions') {
+    for (let i = 1; i <= 8; i++) {
+      ['', 'Points', 'Type', 'Options'].forEach(suffix => controls.push({key:'q' + i + suffix, id:'adminQ' + i + suffix, rich:!suffix}));
+    }
+    controls.push({key:'commentPromptTemplate', id:'adminCommentPromptTemplate', rich:true});
+  } else {
+    const fields = ['EntryFeeAmount', 'CampAnnouncementsTitle'];
+    for (let i = 1; i <= 5; i++) fields.push('CampAnnouncement' + i);
+    fields.push('AtAGlanceTitle');
+    for (let i = 1; i <= 10; i++) fields.push('AtAGlance' + i);
+    fields.forEach(field => controls.push({key:field[0].toLowerCase() + field.slice(1), id:'admin' + field, rich:field !== 'EntryFeeAmount'}));
+  }
+  return controls;
+}
+
+function adminContentValue51_(control) {
+  return String(control.rich ? getRichEditorHtml(control.id) : document.getElementById(control.id).value);
+}
+
+function adminContentValues51_(section) {
+  return Object.fromEntries(adminContentControls51_(section).map(control => [control.key, adminContentValue51_(control)]));
+}
+
+function rememberAdminContent51_(blocks, section) {
+  ADMIN_CONTENT_STATE51[section] = {week:Number(blocks.questionWeek), values:adminContentValues51_(section), tokens:blocks.editTokens || {}};
+}
+
+function applyAdminContentUpdate51_(update) {
+  if (!update) return;
+  CONTENT_REFRESH_REVISION51++;
+  if (!APP_DATA || Number(APP_DATA.weekNumber) !== Number(update.weekNumber)) { loadAppData(); return; }
+  if (update.section === 'questions') {
+    APP_DATA.questions = update.questions;
+    renderQuestions(update.questions || []);
+    return;
+  }
+  APP_DATA.entryFeeAmount = update.entryFeeAmount;
+  APP_DATA.contentBlocks = update.contentBlocks;
+  document.getElementById('campAnnouncementsTitle').innerHTML = update.contentBlocks.campAnnouncementsTitle || 'Camp Announcements';
+  const rulesTitle = normalizeCampRulesTitle_(update.contentBlocks.atAGlanceTitle);
+  document.getElementById('atAGlanceTitle').innerHTML = rulesTitle === 'How to Play'
+    ? ((APP_DATA.seasonPhase && APP_DATA.seasonPhase.messages && APP_DATA.seasonPhase.messages.rulesTitle) || rulesTitle) : rulesTitle;
+  const entryFee = document.getElementById('entryFeeAcknowledgmentText');
+  if (entryFee) entryFee.textContent = `I acknowledge that I will pay the $${update.entryFeeAmount || '20'} entry fee to join the tribe this season.`;
+  renderContentBlocks(update.contentBlocks);
+}
+
+function acceptAdminContentSave51_(section, before, submitted, blocks) {
+  if (ADMIN_CONTENT_STATE51[section] !== before) return;
+  if (section === 'questions' && Number(document.getElementById('adminQuestionWeek').value) !== before.week) return;
+  const current = adminContentValues51_(section), savedValues = {};
+  adminContentControls51_(section).forEach(control => {
+    const value = String(blocks[control.key] ?? '');
+    if (current[control.key] === submitted[control.key]) {
+      if (control.rich) setRichEditorHtml(control.id, value);
+      else document.getElementById(control.id).value = value;
+      savedValues[control.key] = adminContentValue51_(control);
+    } else savedValues[control.key] = value;
+  });
+  ADMIN_CONTENT_STATE51[section] = {week:Number(blocks.questionWeek), values:savedValues, tokens:blocks.editTokens || {}};
+  const savedById = Object.fromEntries(adminContentControls51_(section).map(control => [control.id, savedValues[control.key]]));
+  if (ADMIN_SAVED_STATE) ADMIN_SAVED_STATE = JSON.stringify(JSON.parse(ADMIN_SAVED_STATE).map(item =>
+    Object.prototype.hasOwnProperty.call(savedById, item[0]) ? [item[0], savedById[item[0]]] : item));
+  const after = adminContentValues51_(section);
+  const dirtySection = section === 'questions' ? 'adminQuestionsSection' : 'adminCampContentSection';
+  if (Object.keys(after).some(key => after[key] !== savedValues[key])) ADMIN_DIRTY_SECTIONS.add(dirtySection);
+  else ADMIN_DIRTY_SECTIONS.delete(dirtySection);
+  if (section === 'questions') updateAdminQuestionWeekStatus(blocks);
+}
+
 function adminSaveContentBlocks(section) {
   const saveSection = section === 'camp' ? 'camp' : 'questions';
-  if (saveSection === 'questions') {
-    for (let i = 1; i <= 8; i++) {
-      const prompt = getRichEditorHtml(`adminQ${i}`).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim();
-      const source = document.getElementById(`adminQ${i}Type`).value;
-      if (prompt && !source) {
-        showModal('Options Source Required', `Select an Options Source for Q${i} before saving.`);
-        return;
-      }
-    }
+  if (ADMIN_CONTENT_PENDING51.has(saveSection)) return;
+  const before = ADMIN_CONTENT_STATE51[saveSection];
+  if (!before || !Object.keys(before.tokens).length) { showModal('Reload Needed', 'Reload the website before saving.'); return; }
+  if (saveSection === 'questions' && Number(document.getElementById('adminQuestionWeek').value) !== before.week) {
+    showModal('Load Questions First', 'Load the selected week before editing or saving its questions.'); return;
   }
+  const submitted = adminContentValues51_(saveSection);
+  const changes = Object.fromEntries(Object.entries(submitted).filter(([key, value]) => value !== before.values[key]));
+  if (!Object.keys(changes).length) { showModal('No Changes', 'There are no changes to save in this section.'); return; }
+  ADMIN_CONTENT_PENDING51.add(saveSection);
   showLoadingTorch();
-  google.script.run
-    .withSuccessHandler(r => {
-      hideLoadingTorch();
-      showModal(
-        saveSection === 'questions' ? 'Weekly Questions Saved' : 'Camp Announcements Saved',
-        r.message || (saveSection === 'questions' ? 'Weekly questions saved.' : 'Camp announcements saved.')
-      );
-      if (saveSection === 'questions') {
-        updateAdminQuestionWeekStatus({
-          questionWeek: r.week || document.getElementById('adminQuestionWeek').value,
-          hasSavedQuestionWeek: true
-        });
-      }
-      captureAdminSectionSavedState(saveSection);
-      loadAppData();
-    })
-    .withFailureHandler(err => {
-      hideLoadingTorch();
-      showModal('Council Error', getErrorMessage(err));
-    })
-    .adminSaveContentBlocks(ADMIN_PASSCODE, {
-      section: saveSection,
-      questionWeek: document.getElementById('adminQuestionWeek').value,
-      entryFeeAmount: document.getElementById('adminEntryFeeAmount').value,
-      q1: getRichEditorHtml('adminQ1'),
-      q2: getRichEditorHtml('adminQ2'),
-      q3: getRichEditorHtml('adminQ3'),
-      q4: getRichEditorHtml('adminQ4'),
-      q5: getRichEditorHtml('adminQ5'),
-      q6: getRichEditorHtml('adminQ6'),
-      q7: getRichEditorHtml('adminQ7'),
-      q8: getRichEditorHtml('adminQ8'),
-      q1Points: document.getElementById('adminQ1Points').value,
-      q2Points: document.getElementById('adminQ2Points').value,
-      q3Points: document.getElementById('adminQ3Points').value,
-      q4Points: document.getElementById('adminQ4Points').value,
-      q5Points: document.getElementById('adminQ5Points').value,
-      q6Points: document.getElementById('adminQ6Points').value,
-      q7Points: document.getElementById('adminQ7Points').value,
-      q8Points: document.getElementById('adminQ8Points').value,
-      q1Type: document.getElementById('adminQ1Type').value,
-      q1Options: document.getElementById('adminQ1Options').value,
-      q2Type: document.getElementById('adminQ2Type').value,
-      q2Options: document.getElementById('adminQ2Options').value,
-      q3Type: document.getElementById('adminQ3Type').value,
-      q3Options: document.getElementById('adminQ3Options').value,
-      q4Type: document.getElementById('adminQ4Type').value,
-      q4Options: document.getElementById('adminQ4Options').value,
-      q5Type: document.getElementById('adminQ5Type').value,
-      q5Options: document.getElementById('adminQ5Options').value,
-      q6Type: document.getElementById('adminQ6Type').value,
-      q6Options: document.getElementById('adminQ6Options').value,
-      q7Type: document.getElementById('adminQ7Type').value,
-      q7Options: document.getElementById('adminQ7Options').value,
-      q8Type: document.getElementById('adminQ8Type').value,
-      q8Options: document.getElementById('adminQ8Options').value,
-      commentPromptTemplate: getRichEditorHtml('adminCommentPromptTemplate'),
-      campAnnouncementsTitle: getRichEditorHtml('adminCampAnnouncementsTitle'),
-      campAnnouncement1: getRichEditorHtml('adminCampAnnouncement1'),
-      campAnnouncement2: getRichEditorHtml('adminCampAnnouncement2'),
-      campAnnouncement3: getRichEditorHtml('adminCampAnnouncement3'),
-      campAnnouncement4: getRichEditorHtml('adminCampAnnouncement4'),
-      campAnnouncement5: getRichEditorHtml('adminCampAnnouncement5'),
-      atAGlanceTitle: getRichEditorHtml('adminAtAGlanceTitle'),
-      atAGlance1: getRichEditorHtml('adminAtAGlance1'),
-      atAGlance2: getRichEditorHtml('adminAtAGlance2'),
-      atAGlance3: getRichEditorHtml('adminAtAGlance3'),
-      atAGlance4: getRichEditorHtml('adminAtAGlance4'),
-      atAGlance5: getRichEditorHtml('adminAtAGlance5'),
-      atAGlance6: getRichEditorHtml('adminAtAGlance6'),
-      atAGlance7: getRichEditorHtml('adminAtAGlance7'),
-      atAGlance8: getRichEditorHtml('adminAtAGlance8'),
-      atAGlance9: getRichEditorHtml('adminAtAGlance9'),
-      atAGlance10: getRichEditorHtml('adminAtAGlance10')
-    });
+  google.script.run.withSuccessHandler(result => {
+    ADMIN_CONTENT_PENDING51.delete(saveSection);
+    hideLoadingTorch();
+    acceptAdminContentSave51_(saveSection, before, submitted, result.contentBlocks);
+    applyAdminContentUpdate51_(result.contentUpdate);
+    showModal(saveSection === 'questions' ? 'Weekly Questions Saved' : 'Camp Announcements Saved', result.message);
+  }).withFailureHandler(error => {
+    ADMIN_CONTENT_PENDING51.delete(saveSection);
+    hideLoadingTorch();
+    showModal('Council Error', getErrorMessage(error));
+  }).adminSaveContentBlocks(ADMIN_PASSCODE, {section:saveSection, questionWeek:before.week, changes, expected:before.tokens});
 }
+
 
 function getAdminSelectedAnswers_(id) {
   return Array.from(document.getElementById(id).querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox.value);
