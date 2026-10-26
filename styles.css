@@ -3487,3 +3487,84 @@ tbody tr:hover td {
 .recap-video-row textarea { width: 100%; min-height: 72px; resize: vertical; }
 
 .recap-video-links .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* The camp keepsake: timber, parchment and rope match the existing camp palette. */
+.camp-photo {
+  width: 100%;
+  max-width: 1120px;
+  margin: 34px auto 10px;
+  padding: clamp(12px, 2.4vw, 28px);
+  position: relative;
+  border: 1px solid #b58a4e;
+  border-radius: 7px;
+  background:
+    repeating-linear-gradient(3deg, transparent 0 6px, rgba(24, 12, 5, .19) 7px, transparent 9px 16px),
+    repeating-linear-gradient(177deg, transparent 0 22px, rgba(222, 173, 98, .09) 24px, transparent 26px 41px),
+    linear-gradient(135deg, #805331, #3f2819 38%, #644328 72%, #382318);
+  box-shadow:
+    inset 0 0 0 3px rgba(36, 21, 12, .7),
+    inset 0 0 0 5px rgba(214, 172, 100, .35),
+    inset 0 8px 12px rgba(255, 214, 144, .12),
+    inset 0 -8px 12px rgba(0, 0, 0, .3),
+    0 18px 38px rgba(0, 0, 0, .35);
+}
+
+.camp-photo-mat {
+  padding: clamp(6px, 1.1vw, 13px);
+  border: 1px solid #c9a16a;
+  background: var(--parchment-texture);
+  box-shadow: var(--scorched-edge-shadow), 0 0 0 2px #2c1b11, 0 2px 6px rgba(0, 0, 0, .4);
+}
+
+.camp-photo-open {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #785536;
+  background: var(--bg-deep);
+  cursor: zoom-in;
+}
+
+.camp-photo-open:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.camp-photo-open img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.camp-photo-rope {
+  position: absolute;
+  width: clamp(29px, 5vw, 54px);
+  height: clamp(9px, 1.4vw, 15px);
+  border: 1px solid #634522;
+  border-radius: 3px;
+  background: repeating-linear-gradient(110deg, #806039 0 2px, #d2b27a 2px 4px, #a98550 4px 6px);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .45), inset 0 1px 1px #ecd09a;
+  pointer-events: none;
+}
+
+.camp-photo-rope-top-left { top: 10px; left: -3px; transform: rotate(-45deg); }
+.camp-photo-rope-top-right { top: 10px; right: -3px; transform: rotate(45deg); }
+.camp-photo-rope-bottom-left { bottom: 10px; left: -3px; transform: rotate(45deg); }
+.camp-photo-rope-bottom-right { bottom: 10px; right: -3px; transform: rotate(-45deg); }
+
+.camp-photo-caption {
+  width: fit-content;
+  max-width: 100%;
+  margin: 16px auto -3px;
+  padding: 7px 30px;
+  border: 1px solid #b99558;
+  border-radius: 3px;
+  color: #fff0c7;
+  background: linear-gradient(135deg, #21433d, #252c23);
+  box-shadow: inset 0 0 0 2px rgba(240, 184, 77, .12), 0 3px 6px rgba(0, 0, 0, .3);
+  font-size: clamp(.92rem, 1.8vw, 1.15rem);
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 1px 2px #171710;
+}
