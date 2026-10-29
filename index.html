@@ -3471,9 +3471,9 @@ tbody tr:hover td {
 }
 
 #seasonTableContainer .season-ledger-table th:not(.season-player-rank) {
-  min-width: 128px;
-  max-width: 180px;
-  padding-inline: 9px;
+  min-width: 120px;
+  max-width: 172px;
+  padding-inline: 5px;
 }
 
 #seasonTableContainer .season-ledger-table .season-player-rank {
@@ -3483,6 +3483,12 @@ tbody tr:hover td {
 
 #seasonTableContainer .season-ledger-table td {
   padding-inline: 7px;
+  padding-block: 4px;
+}
+
+/* Tighten cell gutters while preserving the answer bubbles' content area. */
+#seasonTableContainer .season-ledger-table .ledger-pick-cell {
+  padding-inline: 3px;
 }
 
 #seasonTableContainer .season-ledger-table .pick-pill {
@@ -3529,6 +3535,147 @@ tbody tr:hover td {
 
 /* Display all player rows while retaining horizontal navigation. */
 .season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }
+
+/* Keep the Season Ledger and both scrollbars inside the visible page. */
+.app-shell:has(#seasonTable.active) {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: clip;
+}
+
+.app-shell:has(#seasonTable.active) > .topbar {
+  flex: 0 0 auto;
+}
+
+.container:has(> #seasonTable.active) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.container:has(> #seasonTable.active) > .hero {
+  display: none;
+}
+
+#seasonTable.active,
+#seasonTable > .card,
+#seasonTableContainer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+#seasonTable > .card {
+  margin-bottom: 0;
+}
+
+#seasonTable .section-title,
+#seasonTable .subtle {
+  flex-shrink: 0;
+}
+
+#seasonTableContainer {
+  overflow: hidden;
+}
+
+#seasonTableContainer > .season-ledger-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: scroll;
+  padding-bottom: 0;
+  scrollbar-width: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+#seasonTableContainer > .season-ledger-scroll:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px), (max-height: 520px) {
+  .app-shell:has(#seasonTable.active) .topbar-inner {
+    display: block;
+    padding: 10px 12px;
+  }
+
+  .app-shell:has(#seasonTable.active) .brand {
+    margin-bottom: 8px;
+  }
+
+  .app-shell:has(#seasonTable.active) .nav {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    padding: 0 0 6px;
+    overflow-x: auto;
+  }
+
+  .app-shell:has(#seasonTable.active) .nav-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .app-shell:has(#seasonTable.active) .nav-btn::after {
+    display: none;
+  }
+
+  .container:has(> #seasonTable.active) {
+    padding: 12px 10px max(12px, env(safe-area-inset-bottom));
+  }
+
+  #seasonTable > .card {
+    padding: 14px;
+  }
+}
+
+@media (max-height: 520px) {
+  .app-shell:has(#seasonTable.active) .brand,
+  #seasonTable > .card > .subtle {
+    display: none;
+  }
+
+  .container:has(> #seasonTable.active) {
+    padding: 8px 10px;
+  }
+
+  #seasonTable > .card {
+    padding: 10px;
+  }
+
+  #seasonTable .section-title {
+    margin-bottom: 8px;
+    font-size: 1.15rem;
+  }
+}
+
+/* Opaque backing keeps scrolled answers from showing through sticky cells. */
+#seasonTableContainer thead th {
+  background-color: #213d37;
+}
+
+#seasonTableContainer thead .sticky-player {
+  z-index: 40;
+}
+
+#seasonTableContainer thead tr:nth-child(2) th {
+  background-color: #f3e2bd;
+}
+
+#seasonTableContainer tbody .sticky-player {
+  background-color: #fffdf7 !important;
+}
 /* The existing boxes keep their dimensions and styling until they are next. */
 .countdown-box[data-schedule-event], .main-schedule-item[data-schedule-event] {
   position: relative;
@@ -6771,7 +6918,7 @@ function loadSeasonResponsesTable() {
       }).join('');
 
       let html = `
-        <div class="season-ledger-scroll">
+        <div class="season-ledger-scroll" role="region" aria-label="Season ledger responses and points" tabindex="0">
           <table class="elite-picks-table season-ledger-table">
             <thead>
               <tr>
