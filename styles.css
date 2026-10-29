@@ -3640,6 +3640,56 @@ tbody tr:hover td {
   }
 }
 
+/* A synchronized horizontal scrollbar stays within reach on the taller ledger. */
+.season-ledger-bottom-scroll {
+  position: fixed;
+  z-index: 90;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  height: 26px;
+  padding: 0;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  border: 1px solid rgba(47, 113, 108, 0.5);
+  border-radius: 6px;
+  background: #fff8e5;
+  box-shadow: 0 -3px 14px rgba(47, 38, 28, 0.22);
+  scrollbar-color: rgba(47, 113, 108, 0.85) #fff8e5;
+  scrollbar-width: auto;
+  overscroll-behavior-x: contain;
+}
+
+.season-ledger-bottom-scroll[hidden] {
+  display: none;
+}
+
+.season-ledger-bottom-scroll > div {
+  height: 1px;
+}
+
+.season-ledger-bottom-scroll::-webkit-scrollbar {
+  height: 16px;
+}
+
+.season-ledger-bottom-scroll::-webkit-scrollbar-track {
+  background: #fff8e5;
+}
+
+.season-ledger-bottom-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #fff8e5;
+  border-radius: 999px;
+  background: var(--teal);
+}
+
+.season-ledger-bottom-scroll:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.container:has(> #seasonTable.active) {
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+}
+
+
 .recap-entry-title, .recap-entry-title * { font-weight: 700 !important; }
 .recap-video-manager, .recap-video-links { margin-top: 24px; }
 .recap-video-list { list-style: none; padding: 0; margin: 0; }
