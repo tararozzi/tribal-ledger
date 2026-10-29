@@ -2182,6 +2182,7 @@ function getSeasonResponsesTable() {
   weeks.forEach(week => {
     const weekRows = visiblePicks.filter(r => Number(r.Week || 0) === week);
     const scoring = scoringMap[week] || {};
+    const savedQuestions = getSavedQuestionWeekConfig_(week);
     const questionPoints = getQuestionPointsForWeek_(week, config, scoring);
 
     questionKeys.forEach(q => {
@@ -2189,7 +2190,10 @@ function getSeasonResponsesTable() {
       if (!hasAssignedPointValue_(points)) return;
 
       const sample = weekRows.find(r => String(r[q.labelCol] || '').trim());
-      const label = sample ? String(sample[q.labelCol] || '').trim() : '';
+      // Admin owns saved weekly prompts; pick snapshots are only a legacy fallback.
+      const label = savedQuestions
+        ? cleanQuestionPrompt_(savedQuestions[q.key.toUpperCase()])
+        : (sample ? String(sample[q.labelCol] || '').trim() : '');
       if (!label) return;
 
       columns.push({
