@@ -3626,6 +3626,28 @@ tbody tr:hover td {
 }
 
 /* Long question headings must not cover the rows on smaller screens. */
+
+@media (max-width: 700px) {
+  #seasonTableContainer {
+    --ledger-player-column-width: 152px;
+  }
+
+  #seasonTableContainer .season-player-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  #seasonTableContainer .season-player-card strong {
+    overflow-wrap: anywhere;
+  }
+
+  #seasonTableContainer .season-player-total {
+    grid-column: 2;
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 700px), (max-height: 600px) {
   #seasonTableContainer .season-ledger-table thead tr:nth-child(2) th,
   #seasonTableContainer .season-ledger-table thead .sticky-player {
