@@ -3484,26 +3484,15 @@ tbody tr:hover td {
 /* Display all player rows while retaining horizontal navigation. */
 .season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }
 
-/* Keep the Season Ledger and both scrollbars inside the visible page. */
+/* Leave room for the frozen headings and ten player rows. */
 .app-shell:has(#seasonTable.active) {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   overflow: clip;
 }
 
-.app-shell:has(#seasonTable.active) > .topbar {
-  flex: 0 0 auto;
-}
-
 .container:has(> #seasonTable.active) {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
   width: 100%;
-  min-height: 0;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
@@ -3514,10 +3503,7 @@ tbody tr:hover td {
 #seasonTable.active,
 #seasonTable > .card,
 #seasonTableContainer {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
+  display: block;
   min-width: 0;
 }
 
@@ -3535,8 +3521,7 @@ tbody tr:hover td {
 }
 
 #seasonTableContainer > .season-ledger-scroll {
-  flex: 1;
-  min-height: 0;
+  height: var(--season-ledger-height, 720px);
   max-height: none;
   overflow: scroll;
   padding-bottom: 0;

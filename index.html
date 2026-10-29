@@ -3536,26 +3536,15 @@ tbody tr:hover td {
 /* Display all player rows while retaining horizontal navigation. */
 .season-ledger-scroll, .camp-picks-scroll { max-height: none; height: auto; overflow-y: hidden; }
 
-/* Keep the Season Ledger and both scrollbars inside the visible page. */
+/* Leave room for the frozen headings and ten player rows. */
 .app-shell:has(#seasonTable.active) {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   overflow: clip;
 }
 
-.app-shell:has(#seasonTable.active) > .topbar {
-  flex: 0 0 auto;
-}
-
 .container:has(> #seasonTable.active) {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
   width: 100%;
-  min-height: 0;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
@@ -3566,10 +3555,7 @@ tbody tr:hover td {
 #seasonTable.active,
 #seasonTable > .card,
 #seasonTableContainer {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
+  display: block;
   min-width: 0;
 }
 
@@ -3587,8 +3573,7 @@ tbody tr:hover td {
 }
 
 #seasonTableContainer > .season-ledger-scroll {
-  flex: 1;
-  min-height: 0;
+  height: var(--season-ledger-height, 720px);
   max-height: none;
   overflow: scroll;
   padding-bottom: 0;
@@ -6906,10 +6891,41 @@ function syncLedgerPlayerColumnWidth_(additionalNames) {
   document.documentElement.style.setProperty('--ledger-player-column-width', `${columnWidth}px`);
 }
 
+function fitSeasonLedgerRows_(container) {
+  if (container.seasonLedgerResizeObserver) {
+    container.seasonLedgerResizeObserver.disconnect();
+  }
+  const scroll = container.querySelector('.season-ledger-scroll');
+  if (!scroll) return;
+  const table = scroll.querySelector('table');
+
+  const resize = () => {
+    if (!table.getBoundingClientRect().width) return;
+    const heights = Array.from(table.tBodies[0].rows, row => row.getBoundingClientRect().height);
+    // Use the tallest group of ten so later rows fit as well as the first ten.
+    const count = Math.min(10, heights.length);
+    let groupHeight = heights.slice(0, count).reduce((sum, height) => sum + height, 0);
+    let rowsHeight = groupHeight;
+    for (let i = count; i < heights.length; i++) {
+      groupHeight += heights[i] - heights[i - count];
+      rowsHeight = Math.max(rowsHeight, groupHeight);
+    }
+    const headerHeight = table.tHead.getBoundingClientRect().height;
+    const scrollbarAndBorders = scroll.offsetHeight - scroll.clientHeight;
+    scroll.style.setProperty('--season-ledger-height',
+      `${Math.ceil(headerHeight + rowsHeight + scrollbarAndBorders)}px`);
+  };
+
+  resize();
+  container.seasonLedgerResizeObserver = new ResizeObserver(resize);
+  container.seasonLedgerResizeObserver.observe(table);
+}
+
 function loadSeasonResponsesTable() {
   const container = document.getElementById('seasonTableContainer');
   if (!container) return;
 
+  if (container.seasonLedgerResizeObserver) container.seasonLedgerResizeObserver.disconnect();
   container.innerHTML = loadingMarkup('Loading season ledger...');
   showLoadingTorch();
 
@@ -6992,6 +7008,7 @@ function loadSeasonResponsesTable() {
       `;
 
       container.innerHTML = html;
+      fitSeasonLedgerRows_(container);
     })
     .withFailureHandler(err => {
       hideLoadingTorch();
