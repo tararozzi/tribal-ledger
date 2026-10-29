@@ -3625,6 +3625,14 @@ tbody tr:hover td {
   background-color: #fffdf7 !important;
 }
 
+/* Long question headings must not cover the rows on smaller screens. */
+@media (max-width: 700px), (max-height: 600px) {
+  #seasonTableContainer .season-ledger-table thead tr:nth-child(2) th,
+  #seasonTableContainer .season-ledger-table thead .sticky-player {
+    top: auto;
+  }
+}
+
 .recap-entry-title, .recap-entry-title * { font-weight: 700 !important; }
 .recap-video-manager, .recap-video-links { margin-top: 24px; }
 .recap-video-list { list-style: none; padding: 0; margin: 0; }

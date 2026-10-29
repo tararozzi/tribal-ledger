@@ -3676,6 +3676,14 @@ tbody tr:hover td {
 #seasonTableContainer tbody .sticky-player {
   background-color: #fffdf7 !important;
 }
+
+/* Long question headings must not cover the rows on smaller screens. */
+@media (max-width: 700px), (max-height: 600px) {
+  #seasonTableContainer .season-ledger-table thead tr:nth-child(2) th,
+  #seasonTableContainer .season-ledger-table thead .sticky-player {
+    top: auto;
+  }
+}
 /* The existing boxes keep their dimensions and styling until they are next. */
 .countdown-box[data-schedule-event], .main-schedule-item[data-schedule-event] {
   position: relative;
